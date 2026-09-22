@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { getChatGPTUser } from '@/app/chatgpt-auth';
 import { database } from '@/db/database';
 import { env } from 'cloudflare:workers';
+import { twilio, publicUrl } from '@/lib/telephony';
 import { defaultConfig,workflows,followup,receptionistReply } from '@/lib/domain';
 export const dynamic='force-dynamic';
 const id=()=>crypto.randomUUID();
@@ -17,7 +18,7 @@ async function own(db:D1Database,w:string,owner:string){const ws=await db.prepar
 async function customer(db:D1Database,w:string,c:string){const row=await db.prepare('SELECT * FROM customers WHERE id=? AND workspace=?').bind(c,w).first<any>();if(!row)fail(404,'Customer not found.');return row;}
 function response(data:any,status=200){return Response.json(data,{status,headers:{'Cache-Control':'no-store'}})}
 function error(e:unknown){if(e instanceof ApiError)return response({error:e.message},e.status);if(e instanceof z.ZodError)return response({error:e.issues[0]?.message||'Invalid input'},400);if(e instanceof SyntaxError)return response({error:'Invalid request body.'},400);console.error(e);return response({error:'The request could not be saved. Please try again.'},500);}
-export async function GET(request:Request){try{const u=await user(),db=database(),w=new URL(request.url).searchParams.get('workspace');const all=await db.prepare('SELECT id,name,created FROM workspaces WHERE owner=? ORDER BY created').bind(u.userId).all();if(!w)return response({workspaces:all.results});const ws=await own(db,w,u.userId);const results=await db.batch(['customers','items','bookings','messages','tasks'].map(t=>db.prepare(`SELECT * FROM ${t} WHERE workspace=? ORDER BY created DESC`).bind(w)));return response({workspaces:all.results,workspace:{...ws,owner:undefined,config:JSON.parse(ws.config)},...Object.fromEntries(['customers','items','bookings','messages','tasks'].map((t,i)=>[t,results[i].results]))});}catch(e){return error(e)}}
+export async function GET(request:Request){try{const u=await user(),db=database(),w=new URL(request.url).searchParams.get('workspace');const all=await db.prepare('SELECT id,name,created FROM workspaces WHERE owner=? ORDER BY created').bind(u.userId).all();if(!w)return response({workspaces:all.results});const ws=await own(db,w,u.userId);const results=await db.batch(['customers','items','bookings','messages','tasks','voice_calls'].map(t=>db.prepare(`SELECT * FROM ${t} WHERE workspace=? ORDER BY created DESC`).bind(w)));return response({workspaces:all.results,workspace:{...ws,owner:undefined,config:JSON.parse(ws.config)},...Object.fromEntries(['customers','items','bookings','messages','tasks','voice_calls'].map((t,i)=>[t,results[i].results]))});}catch(e){return error(e)}}
 export async function POST(request:Request){try{const origin=request.headers.get('origin');if(!origin||origin!==new URL(request.url).origin)fail(403,'Cross-site requests are not allowed.');const u=await user();if(Number(request.headers.get('content-length')||0)>20000)fail(413,'Request too large.');const raw=await request.text();if(raw.length>20000)fail(413,'Request too large.');const body=z.record(z.unknown()).parse(JSON.parse(raw)),action=z.string().parse(body.action),db=database();
 if(action==='create_workspace'){const name=text.parse(body.name);const count=await db.prepare('SELECT count(*) AS n FROM workspaces WHERE owner=?').bind(u.userId).first<{n:number}>();if((count?.n||0)>=10)fail(400,'The local demo supports up to 10 workspaces.');const w=id();await db.prepare('INSERT INTO workspaces(id,owner,name,config,created) VALUES(?,?,?,?,?)').bind(w,u.userId,name,JSON.stringify(defaultConfig),now()).run();if(body.sample===true)await seed(db,w,name);return response({id:w},201);}
 const w=z.string().uuid().parse(body.workspace),ws=await own(db,w,u.userId),config=JSON.parse(ws.config);
@@ -61,7 +62,10 @@ if(action==='review_task'){const t=await db.prepare('SELECT * FROM tasks WHERE i
 if(action==='call_me'){
  const to=phone.parse(body.phone); const sid=String((env as any).TWILIO_ACCOUNT_SID||''); const token=String((env as any).TWILIO_AUTH_TOKEN||''); const from=String((env as any).TWILIO_PHONE_NUMBER||config.businessPhone||''); const base=String((env as any).PUBLIC_BASE_URL||'');
  if(!sid||!token||!from||!base)fail(503,'Telephony is not configured. Add Twilio credentials, TWILIO_PHONE_NUMBER, and PUBLIC_BASE_URL.');
- const form=new URLSearchParams({To:to,From:from,Url:`${base.replace(/\/$/,'')}/api/voice`}); const result=await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Calls.json`,{method:'POST',headers:{Authorization:`Basic ${btoa(`${sid}:${token}`)}`,'Content-Type':'application/x-www-form-urlencoded'},body:form}); const json:any=await result.json(); if(!result.ok)fail(502,json.message||'Twilio could not start the call.'); return response({ok:true,callSid:json.sid});
+ try {
+ const result=await twilio('Calls.json',new URLSearchParams({To:to,From:from,Url:publicUrl(`/api/voice?workspace=${encodeURIComponent(w)}`),StatusCallback:publicUrl(`/api/voice/status?workspace=${encodeURIComponent(w)}`),StatusCallbackEvent:'completed',Timeout:'25'}));
+ return response({ok:true,callSid:result.sid});
+ }catch(e){fail(502,e instanceof Error?e.message:'Call request failed. Check Twilio before retrying.');}
 }
 fail(400,'Unknown action.');
 }catch(e){return error(e)}}
