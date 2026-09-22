@@ -1,4 +1,22 @@
-# vinext-starter
+# Relay business workspace
+
+Local SaaS sandbox for customer records, simulated conversations, opportunity follow-ups, and linked one-hour bookings. See [PILOT_PLAN.md](PILOT_PLAN.md) for the demonstration and pilot plan.
+
+## Run on this PC
+
+Open PowerShell in `C:\Users\openc\Documents\RelaySaaS`, then run `npm run dev`. Open http://localhost:5173. Existing local data is stored in `.wrangler/state`; preserve this directory when restarting. The two checked-in database migrations have already been applied on this PC.
+
+`npm run typecheck`, `npm test`, and `npm run build` verify the code. Tests use a separate temporary database and do not change the demo workspace. Do not run database reset commands against `.wrangler/state`.
+
+The local sign-in uses a development identity. Calls, messages, and receptionist replies are simulations; integrations and subscription billing are not connected. This checkout is not a production service.
+
+## Real phone test path
+
+The Twilio test path is implemented at `/api/workspace` (`call_me`), `/api/voice`, and `/api/voice/respond`. It is disabled until these server-side variables exist: `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER`, `PUBLIC_BASE_URL`, and optionally `OPENAI_API_KEY`. Copy `.dev.vars.example` to `.dev.vars`; never paste secrets into source or the browser. Twilio must be able to reach the HTTPS `PUBLIC_BASE_URL`, so localhost alone is not enough. The current voice loop uses Twilio speech gathering and text-to-speech; it is a controlled first integration, not a finished production voice agent.
+
+See [DEPLOYMENT_CHECKLIST.md](DEPLOYMENT_CHECKLIST.md) before connecting a pilot business. `/api/health` reports only non-secret configuration status.
+
+## Framework reference
 
 A clean full-stack starter running on [vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and Drizzle support.
 

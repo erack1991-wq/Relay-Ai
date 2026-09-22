@@ -1,0 +1,8 @@
+# Copy to .dev.vars for local development. Never commit the real file.
+TWILIO_ACCOUNT_SID="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+TWILIO_AUTH_TOKEN="replace-with-twilio-auth-token"
+TWILIO_PHONE_NUMBER="+1xxxxxxxxxx"
+PUBLIC_BASE_URL="https://your-public-https-tunnel.example"
+OPENAI_API_KEY="sk-..."
+OPENAI_VOICE_MODEL="gpt-5-mini"
+RELAY_GREETING="Thanks for calling. What service do you need today?"

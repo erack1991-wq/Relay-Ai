@@ -52,7 +52,7 @@ export default defineConfig(async () => {
 
   return {
     server: {
-      ...(managedLinux ? { host: "0.0.0.0", allowedHosts: ["terminal.local"] } : {}),
+      ...(managedLinux ? { host: "0.0.0.0", allowedHosts: [".trycloudflare.com", "localhost"] } : { allowedHosts: [".trycloudflare.com", "localhost"] }),
       ...(isCodexSeatbeltSandbox ? { watch: { useFsEvents: false, usePolling: true } } : {}),
     },
     plugins: [
