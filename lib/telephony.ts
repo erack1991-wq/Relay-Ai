@@ -23,7 +23,10 @@ export async function verifiedForm(request: Request) {
   const signature = request.headers.get('x-twilio-signature') || '';
   if (!token || !signature || form.get('AccountSid') !== bindings().TWILIO_ACCOUNT_SID) throw new Error('Invalid webhook');
   const url = new URL(request.url);
-  let payload = publicUrl(url.pathname + url.search);
+  // Twilio signs the exact public URL it requested. Use the request origin
+  // here instead of the configured callback origin so a deployment URL,
+  // custom domain, or proxy cannot invalidate an otherwise valid webhook.
+  let payload = `${url.origin}${url.pathname}${url.search}`;
   for (const key of [...new Set(form.keys())].sort()) for (const value of [...new Set(form.getAll(key))].sort()) payload += key + value;
   const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(token), { name: 'HMAC', hash: 'SHA-1' }, false, ['verify']);
   let sig: Uint8Array<ArrayBuffer>;
