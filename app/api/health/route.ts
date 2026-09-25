@@ -2,7 +2,9 @@ import { env } from 'cloudflare:workers';
 export const dynamic='force-dynamic';
 export async function GET(){
  const e=env as unknown as Record<string, unknown>;
- let database=false;
- try{await (e.DB as D1Database).prepare('SELECT id FROM voice_calls LIMIT 1').all();database=true;}catch{}
- return Response.json({ok:database,service:'relay',databaseReachable:database,configuration:{twilio:Boolean(e.TWILIO_ACCOUNT_SID&&e.TWILIO_AUTH_TOKEN&&e.TWILIO_PHONE_NUMBER),ai:Boolean(e.OPENAI_API_KEY),publicUrl:Boolean(e.PUBLIC_BASE_URL)},note:'Configuration presence does not verify provider authentication, delivery, calendar integration, or end-to-end readiness.'},{status:database?200:503,headers:{'Cache-Control':'no-store'}});
+ let database=false;const missingTables:string[]=[];
+ try{const db=e.DB as D1Database;for(const table of ['workspaces','customers','bookings','voice_calls','subscriptions','subscription_events']){try{await db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).all();}catch{missingTables.push(table);}}database=missingTables.length===0;}catch{}
+ const configuration={twilio:Boolean(e.TWILIO_ACCOUNT_SID&&e.TWILIO_AUTH_TOKEN&&e.TWILIO_PHONE_NUMBER),ai:Boolean(e.OPENAI_API_KEY),publicUrl:Boolean(e.PUBLIC_BASE_URL),billing:Boolean(e.STRIPE_SECRET_KEY&&e.STRIPE_PRICE_ID&&e.STRIPE_WEBHOOK_SECRET)};
+ const readyForPilot=database&&configuration.twilio&&configuration.ai&&configuration.publicUrl;
+ return Response.json({ok:database,readyForPilot,service:'relay',databaseReachable:database,missingTables,configuration,note:'Configuration presence does not verify provider authentication, delivery, calendar integration, or end-to-end readiness.'},{status:database?200:503,headers:{'Cache-Control':'no-store'}});
 }

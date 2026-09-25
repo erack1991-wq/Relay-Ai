@@ -98,7 +98,7 @@ test('Signed live voice intake, booking and confirmation',async t=>{
   const response=await statusApi.POST(new Request(url,{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded','x-twilio-signature':sig},body:params}));
   assert.equal(response.status,204);
   const call=await db.prepare('SELECT status,error FROM voice_calls WHERE id=?').bind(id).first();
-  assert.equal(call.status,'needs-attention');assert.match(call.error,/AI provider/);
+ assert.equal(call.status,'needs-attention');assert.match(call.error,/AI provider/);
  });
  await t.test('human and urgent caller requests stay visible for the operator',async()=>{
   for (const [char,phrase,expected] of [['7','Please let me speak to a person','human callback'],['8','There is a gas leak','Urgent request']]) {

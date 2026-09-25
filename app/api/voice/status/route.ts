@@ -15,8 +15,9 @@ export async function POST(request:Request){
       // Provider completion must not erase an intake or SMS failure that still needs a human.
       await db.prepare("UPDATE voice_calls SET status=CASE WHEN error IS NOT NULL AND error<>'' THEN 'needs-attention' ELSE ? END,updated=? WHERE id=?").bind(status,stamp,sid).run();
       if(['no-answer','busy','failed'].includes(status)){
-        const workspace=new URL(request.url).searchParams.get('workspace')||'';
-        const call=await db.prepare('SELECT phone FROM voice_calls WHERE id=? AND workspace=?').bind(sid,workspace).first<{phone:string}>();
+        const requestedWorkspace=new URL(request.url).searchParams.get('workspace')||'';
+        const call=await db.prepare('SELECT workspace,phone FROM voice_calls WHERE id=?').bind(sid).first<{workspace:string;phone:string}>();
+        const workspace=requestedWorkspace&&requestedWorkspace===call?.workspace?requestedWorkspace:(call?.workspace||'');
         if(workspace&&call?.phone){
           const customerId=crypto.randomUUID(), itemId=crypto.randomUUID();
           await db.batch([
