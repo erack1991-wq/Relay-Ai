@@ -45,8 +45,8 @@ async function advance(db: D1Database, call: Call, s: State, speech: string, bus
   if (!speech) { s.misses++; if(s.misses>=2){s.step='done';return 'I could not hear a response. Your callback details are saved for the team. Goodbye.';} return 'I did not catch that. Please repeat your answer.'; }
   s.misses=0;
   await db.prepare('INSERT INTO messages(id,workspace,customer,body,direction,status,created) VALUES(?,?,?,?,?,?,?)').bind(`${call.id}:${s.turn}`,call.workspace,s.customer,speech,'inbound','received',now()).run();
-  if (/\b(emergency|gas leak|smell gas|fire)\b/i.test(speech)) {s.step='done';return 'If there is immediate danger, call emergency services now. This line cannot dispatch emergency help. Your message is saved for the business.';}
-  if (/\b(call ?back|human|person|representative)\b/i.test(speech)) {s.step='done';return 'Your number and message are saved for the team to follow up. No appointment has been booked.';}
+  if (/\b(emergency|gas leak|smell gas|fire)\b/i.test(speech)) {s.step='done';await db.prepare('UPDATE voice_calls SET error=? WHERE id=?').bind('Urgent request: human follow-up required. Relay cannot dispatch emergency help.',call.id).run();return 'If there is immediate danger, call emergency services now. This line cannot dispatch emergency help. Your urgent request is saved for the business to follow up.';}
+  if (/\b(call ?back|human|person|representative)\b/i.test(speech)) {s.step='done';await db.prepare('UPDATE voice_calls SET error=? WHERE id=?').bind('Caller requested a human callback.',call.id).run();return 'Your number and message are saved for the team to follow up. No appointment has been booked.';}
   if(s.step==='done')return 'Your request is already saved. Goodbye.';
   if(s.step==='name' || s.step==='service') {
     const value=await extract(speech,s);
@@ -141,7 +141,7 @@ export async function handleVoice(request: Request, initial: boolean) {
       const speech=(form.get('Digits')||form.get('SpeechResult')||'').trim().slice(0,1000);
       const reply=await advance(db,call,state,speech,business);
       state.turn++;
-      await db.prepare('UPDATE voice_calls SET state=?,status=?,updated=? WHERE id=?').bind(JSON.stringify(state),state.step==='done'?'intake-completed':'in-progress',now(),sid).run();
+      await db.prepare("UPDATE voice_calls SET state=?,status=CASE WHEN error IS NOT NULL AND error<>'' THEN 'needs-attention' WHEN ?='done' THEN 'intake-completed' ELSE 'in-progress' END,updated=? WHERE id=?").bind(JSON.stringify(state),state.step,now(),sid).run();
       result=state.step==='done'?say(reply):gather(reply,state.turn);
     }
   }catch(e){
