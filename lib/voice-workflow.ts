@@ -116,9 +116,16 @@ export async function handleVoice(request: Request, initial: boolean) {
   let result:string;
   try {
     if(initial&&!call) {
-      const w=url.searchParams.get('workspace')||bindings().RELAY_WORKSPACE_ID;
-      if(!w)throw new Error('No workspace is configured for inbound calls.');
-      const business=await db.prepare('SELECT * FROM workspaces WHERE id=?').bind(w).first<Business>();
+      let w=url.searchParams.get('workspace')||bindings().RELAY_WORKSPACE_ID||'';
+      let business=await db.prepare('SELECT * FROM workspaces WHERE id=?').bind(w).first<Business>();
+      // A number may retain an old callback ID after a workspace is recreated.
+      // Resolve it only when this account has exactly one workspace; never
+      // guess across multiple businesses.
+      if(!business){
+        const only=await db.prepare('SELECT * FROM workspaces ORDER BY created LIMIT 2').all<Business>();
+        if(only.results.length===1){w=only.results[0].id;business=only.results[0];}
+      }
+      if(!business)throw new Error('Call workspace does not exist.');
       if(!business)throw new Error('Call workspace does not exist.');
       const phone=String(form.get('Direction')?.startsWith('outbound')?form.get('To'):form.get('From'));
       if(!/^\+[1-9]\d{7,14}$/.test(phone))throw new Error('Caller number is unavailable.');
