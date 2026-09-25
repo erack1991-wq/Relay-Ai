@@ -88,4 +88,16 @@ test('Signed live voice intake, booking and confirmation',async t=>{
   assert.equal((await db.prepare('SELECT status FROM voice_calls WHERE id=?').bind(id).first()).status,'needs-attention');
   assert.equal(await db.prepare('SELECT id FROM bookings WHERE id=?').bind(id).first(),null);aiFail=false;
  });
+ await t.test('provider completion does not hide an intake failure',async()=>{
+  const route=resolve('.sites-runtime/tests/voice-status.mjs');
+  await build({entryPoints:['app/api/voice/status/route.ts'],outfile:route,bundle:true,platform:'node',format:'esm',logLevel:'silent',plugins:[{name:'runtime',setup(b){b.onResolve({filter:/^cloudflare:workers$/},a=>({path:a.path,namespace:'runtime'}));b.onLoad({filter:/.*/,namespace:'runtime'},()=>({contents:'export const env=globalThis.__voiceTest.env'}));}}]});
+  const statusApi=await import(pathToFileURL(route).href);
+  const id='CA'+'4'.repeat(32),url='https://relay.test/api/voice/status';
+  const params=new URLSearchParams({AccountSid:env.TWILIO_ACCOUNT_SID,CallSid:id,CallStatus:'completed'});
+  const sig=createHmac('sha1',env.TWILIO_AUTH_TOKEN).update(url+[...params.keys()].sort().map(k=>k+params.get(k)).join('')).digest('base64');
+  const response=await statusApi.POST(new Request(url,{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded','x-twilio-signature':sig},body:params}));
+  assert.equal(response.status,204);
+  const call=await db.prepare('SELECT status,error FROM voice_calls WHERE id=?').bind(id).first();
+  assert.equal(call.status,'needs-attention');assert.match(call.error,/AI provider/);
+ });
 });

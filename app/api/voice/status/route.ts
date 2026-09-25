@@ -12,7 +12,8 @@ export async function POST(request:Request){
     const sid=form.get('CallSid')||'';
     if(['completed','failed','busy','no-answer','canceled'].includes(status)){
       const stamp=new Date().toISOString();
-      await db.prepare('UPDATE voice_calls SET status=?,updated=? WHERE id=?').bind(status,stamp,sid).run();
+      // Provider completion must not erase an intake or SMS failure that still needs a human.
+      await db.prepare("UPDATE voice_calls SET status=CASE WHEN error IS NOT NULL AND error<>'' THEN 'needs-attention' ELSE ? END,updated=? WHERE id=?").bind(status,stamp,sid).run();
       if(['no-answer','busy','failed'].includes(status)){
         const workspace=new URL(request.url).searchParams.get('workspace')||'';
         const call=await db.prepare('SELECT phone FROM voice_calls WHERE id=? AND workspace=?').bind(sid,workspace).first<{phone:string}>();
