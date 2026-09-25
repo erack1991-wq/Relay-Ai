@@ -14,17 +14,30 @@ async function validSignature(request: Request, raw: string) {
 
 export async function GET(request: Request) {
   const query = new URL(request.url).searchParams;
-  if (query.get('hub.verify_token') !== bindings().META_VERIFY_TOKEN) return new Response('Forbidden', { status: 403 });
+  if (query.get('hub.verify_token') !== bindings().META_VERIFY_TOKEN) {
+    console.warn('Messenger webhook verification rejected: verify token mismatch.');
+    return new Response('Forbidden', { status: 403 });
+  }
+  console.log('Messenger webhook verification succeeded.');
   return new Response(query.get('hub.challenge') || '', { status: 200, headers: { 'Content-Type': 'text/plain' } });
 }
 
 export async function POST(request: Request) {
   const raw = await request.text();
-  if (!(await validSignature(request, raw))) return new Response('Forbidden', { status: 403 });
+  if (!(await validSignature(request, raw))) {
+    console.warn('Messenger webhook rejected: invalid or missing signature.');
+    return new Response('Forbidden', { status: 403 });
+  }
   try {
     const body = JSON.parse(raw) as { object?: string; entry?: unknown[] };
-    if (body.object !== 'page') return new Response('Ignored', { status: 200 });
+    if (body.object !== 'page') {
+      console.warn(`Messenger webhook ignored: unsupported object ${String(body.object || 'missing')}.`);
+      return new Response('Ignored', { status: 200 });
+    }
     console.log(`Relay Messenger webhook received ${body.entry?.length || 0} page event(s).`);
     return new Response('EVENT_RECEIVED', { status: 200 });
-  } catch { return new Response('Invalid JSON', { status: 400 }); }
+  } catch {
+    console.warn('Messenger webhook rejected: invalid JSON.');
+    return new Response('Invalid JSON', { status: 400 });
+  }
 }
