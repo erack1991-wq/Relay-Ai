@@ -5,4 +5,8 @@ TWILIO_PHONE_NUMBER="+1xxxxxxxxxx"
 PUBLIC_BASE_URL="https://your-public-https-tunnel.example"
 OPENAI_API_KEY="sk-..."
 OPENAI_VOICE_MODEL="gpt-5-mini"
+# Optional OpenAI-compatible backup provider. Leave unset to use the primary only.
+AI_BACKUP_API_KEY=""
+AI_BACKUP_BASE_URL=""
+AI_BACKUP_MODEL=""
 RELAY_GREETING="Thanks for calling. What service do you need today?"
