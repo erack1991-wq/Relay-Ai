@@ -1,0 +1,4 @@
+import { getChatGPTUser } from '@/app/chatgpt-auth';
+import { database } from '@/db/database';
+export const dynamic = 'force-dynamic';
+export async function GET(request: Request) { const user = await getChatGPTUser(); if (!user) return Response.json({ error: 'Sign in required' }, { status: 401 }); const workspace = new URL(request.url).searchParams.get('workspace'); if (!workspace) return Response.json({ error: 'Workspace required' }, { status: 400 }); const row = await database().prepare('SELECT calendar_id,updated FROM google_calendar_connections WHERE workspace=? AND owner=?').bind(workspace,user.userId).first<{calendar_id:string;updated:string}>(); return Response.json({ connected: !!row, calendarId: row?.calendar_id || null, updated: row?.updated || null }, { headers: { 'Cache-Control': 'no-store' } }); }
