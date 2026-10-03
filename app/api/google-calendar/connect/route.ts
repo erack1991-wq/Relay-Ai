@@ -1,4 +1,4 @@
-import { getChatGPTUser } from '@/app/chatgpt-auth';
+import { chatGPTSignInPath, getChatGPTUser } from '@/app/chatgpt-auth';
 import { database } from '@/db/database';
 import { googleOAuthUrl } from '@/lib/google-calendar';
 
@@ -6,7 +6,11 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
   const user = await getChatGPTUser();
-  if (!user) return new Response('Sign in required', { status: 401 });
+  if (!user) {
+    const url = new URL(request.url);
+    const returnTo = `${url.pathname}${url.search}`;
+    return Response.redirect(new URL(chatGPTSignInPath(returnTo), url.origin), 302);
+  }
   const workspace = new URL(request.url).searchParams.get('workspace');
   if (!workspace) return new Response('Workspace required', { status: 400 });
   const owned = await database().prepare('SELECT id FROM workspaces WHERE id=? AND owner=?').bind(workspace, user.userId).first();
