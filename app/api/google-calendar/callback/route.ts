@@ -25,8 +25,12 @@ export async function GET(request: Request) {
     await db.prepare(`CREATE TABLE IF NOT EXISTS google_calendar_connections (workspace TEXT PRIMARY KEY, owner TEXT NOT NULL, refresh_token TEXT, access_token TEXT NOT NULL, access_expires_at TEXT NOT NULL, calendar_id TEXT NOT NULL DEFAULT 'primary', created TEXT NOT NULL, updated TEXT NOT NULL)`).run();
     const now = new Date().toISOString();
     await db.prepare(`INSERT INTO google_calendar_connections (workspace,owner,refresh_token,access_token,access_expires_at,calendar_id,created,updated) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(workspace) DO UPDATE SET owner=excluded.owner,refresh_token=COALESCE(excluded.refresh_token,google_calendar_connections.refresh_token),access_token=excluded.access_token,access_expires_at=excluded.access_expires_at,updated=excluded.updated`).bind(state.workspace, user.userId, refresh, access, new Date(Date.now() + (token.expires_in || 3600) * 1000).toISOString(), 'primary', now, now).run();
-    const response = Response.redirect(new URL(`/` , url.origin), 302);
-    response.headers.append('Set-Cookie', 'relay_google_oauth_state=; Path=/; Max-Age=0');
-    return response;
+    return new Response(null, {
+      status: 302,
+      headers: {
+        Location: new URL('/', url.origin).toString(),
+        'Set-Cookie': 'relay_google_oauth_state=; Path=/; Max-Age=0',
+      },
+    });
   } catch (error) { return new Response((error as Error).message, { status: 502 }); }
 }
