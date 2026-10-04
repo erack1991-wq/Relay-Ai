@@ -1,6 +1,17 @@
 import { spawn } from 'node:child_process';
+import fs from 'node:fs';
 
-const healthUrl = process.argv[2] || process.env.RELAY_HEALTH_URL;
+function configuredPublicUrl() {
+  try {
+    const line = fs.readFileSync('.dev.vars', 'utf8').split(/\r?\n/).find((entry) => entry.startsWith('PUBLIC_BASE_URL='));
+    return line?.slice('PUBLIC_BASE_URL='.length).trim().replace(/^"|"$/g, '') || '';
+  } catch {
+    return '';
+  }
+}
+
+const baseUrl = process.argv[2] || process.env.RELAY_HEALTH_URL || configuredPublicUrl();
+const healthUrl = baseUrl ? (baseUrl.endsWith('/api/health') ? baseUrl : `${baseUrl.replace(/\/$/, '')}/api/health`) : '';
 const steps = [
   ['Security audit', ['npm', 'audit', '--omit=dev', '--audit-level=high']],
   ['Full verification', ['npm', 'run', 'verify']],
