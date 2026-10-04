@@ -1,0 +1,23 @@
+name: Relay live monitor
+
+on:
+  schedule:
+    - cron: '17 */4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  readiness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check production readiness endpoint
+        env:
+          RELAY_HEALTH_URL: https://relay-business-workspace.epeazy2.chatgpt.site/api/health
+        run: |
+          set -euo pipefail
+          body="$(curl --fail --silent --show-error --max-time 30 "$RELAY_HEALTH_URL")"
+          echo "$body"
+          node -e 'const b=JSON.parse(process.argv[1]); if(!b.ok || !b.databaseReachable) process.exit(1); if(!b.readyForPilot) console.warn("Relay is not pilot-ready; provider verification remains required.")' "$body"
