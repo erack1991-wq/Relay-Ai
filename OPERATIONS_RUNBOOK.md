@@ -25,6 +25,23 @@ Relay is not ready for customer traffic until all of these have evidence:
 - A database backup exists and a restore has been tested in a safe environment.
 - Provider verification and backup timestamps are recorded in the deployment environment.
 
+## Integration setup map
+
+Use the provider dashboards to create credentials; never put secret values in chat, source control, or browser-visible code. Set values in the site's protected runtime environment, then deploy and run the daily safe scan.
+
+| Integration | Required runtime keys | Callback or webhook URL | Verification |
+| --- | --- | --- | --- |
+| OpenAI primary | `OPENAI_API_KEY` | None | Run a supervised AI response and confirm the lead is saved. |
+| AI backup | `AI_BACKUP_API_KEY`, `AI_BACKUP_BASE_URL`, `AI_BACKUP_MODEL` | None | Temporarily simulate a primary outage and confirm backup response behavior. |
+| Twilio | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER` | `/api/voice`, `/api/voice/sms`, `/api/voice/status` | Call, SMS, consent, STOP, booking, and status-callback checks. |
+| Stripe | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID`, optional `STRIPE_SETUP_PRICE_ID` | `/api/billing/webhook` | One test event plus a duplicate delivery. |
+| Google Calendar | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_TOKEN_ENCRYPTION_KEY`, `GOOGLE_REDIRECT_URI` | `/api/google-calendar/callback` | OAuth connection, availability read, booking write, and disconnect. |
+| Meta Messenger | `META_APP_SECRET`, `META_PAGE_ACCESS_TOKEN`, `META_VERIFY_TOKEN` | `/api/messenger/webhook` | Verify challenge, signed event, duplicate event, and intended Page authorization. |
+
+Current public base URL: `https://relay-business-workspace.epeazy2.chatgpt.site`
+
+After changing runtime credentials, verify the deployed environment—not only a local `.env` file. Confirm `/api/health`, then run the affected supervised provider test before routing customer traffic.
+
 ## Failure handling
 
 1. Keep customer intake available while pausing outbound delivery when a provider is degraded.
