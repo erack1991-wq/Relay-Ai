@@ -10,7 +10,9 @@ function run(label, command) {
   return new Promise((resolve) => {
     console.log(`\n=== ${label} ===`);
     const executable = process.platform === 'win32' && command[0] === 'npm' ? 'npm.cmd' : command[0];
-    const child = spawn(executable, command.slice(1), { stdio: 'inherit', shell: false });
+    const child = process.platform === 'win32'
+      ? spawn(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', [executable, ...command.slice(1)].join(' ')], { stdio: 'inherit', shell: false })
+      : spawn(executable, command.slice(1), { stdio: 'inherit', shell: false });
     child.on('close', (code) => resolve(code ?? 1));
   });
 }
