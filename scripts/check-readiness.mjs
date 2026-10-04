@@ -8,6 +8,13 @@ console.log(`Relay readiness: ${body.readyForPilot ? 'READY' : 'NOT READY'}`);
 console.log(`Configuration: ${body.configurationReady ? 'ready' : 'incomplete'}`);
 console.log(`Database: ${body.databaseReachable ? 'reachable' : 'unavailable'}`);
 console.log(`Provider verification: ${body.providerVerification || 'unknown'}`);
+if (body.backup) console.log(`Backups: ${body.backup.lastVerifiedAt ? 'verified' : 'verification missing'}; restore drill: ${body.backup.restoreTestedAt ? 'tested' : 'missing'}`);
+if (body.operations) console.log(`Operations: ${body.operations.queuedJobs || 0} queued, ${body.operations.failedJobs || 0} failed jobs, ${body.operations.failedProviderEvents || 0} failed provider events`);
+
+for (const warning of body.pilotWarnings || []) {
+  console.log(`[WARNING] ${warning.label}`);
+  if (warning.nextAction) console.log(`  Next: ${warning.nextAction}`);
+}
 
 for (const blocker of body.pilotBlockers || []) {
   console.log(`[${String(blocker.severity || 'info').toUpperCase()}] ${blocker.label}: ${blocker.status}`);
