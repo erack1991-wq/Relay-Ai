@@ -1,0 +1,8 @@
+[allowlist]
+description = "Relay local development placeholders and generated artifacts"
+paths = [
+  '''^\.next/''',
+  '''^dist/''',
+  '''^\.sites-runtime/''',
+  '''^\.wrangler/'''
+]
