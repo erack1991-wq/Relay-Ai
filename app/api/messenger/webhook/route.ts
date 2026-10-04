@@ -2,6 +2,7 @@ import { bindings } from '@/lib/telephony';
 import { database } from '@/db/database';
 import { recordProviderEvent } from '@/lib/reliability';
 export const dynamic='force-dynamic';
+const MAX_WEBHOOK_BYTES = 256 * 1024;
 
 async function validSignature(request: Request, raw: string) {
   const secret = bindings().META_APP_SECRET;
@@ -25,7 +26,16 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const declaredLength = Number(request.headers.get('content-length') || 0);
+  if (declaredLength > MAX_WEBHOOK_BYTES) {
+    console.warn('Messenger webhook rejected: payload is too large.');
+    return new Response('Payload too large', { status: 413 });
+  }
   const raw = await request.text();
+  if (new TextEncoder().encode(raw).byteLength > MAX_WEBHOOK_BYTES) {
+    console.warn('Messenger webhook rejected: payload is too large.');
+    return new Response('Payload too large', { status: 413 });
+  }
   if (!(await validSignature(request, raw))) {
     console.warn('Messenger webhook rejected: invalid or missing signature.');
     return new Response('Forbidden', { status: 403 });
