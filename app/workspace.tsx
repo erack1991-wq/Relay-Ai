@@ -20,7 +20,7 @@ import OperationsPanel from './operations-panel';
 const navigation = [['Overview',LayoutDashboard],['Inbox',MessagesSquare],['Customers',Users],['Bookings',CalendarDays],['Receptionist',Phone],['Autopilot',Zap],['Settings',Settings2]] as const;
 type Row=Record<string,any>;
 type Snapshot={workspace:Row;workspaces:Row[];customers:Row[];items:Row[];bookings:Row[];messages:Row[];tasks:Row[];voice_calls:Row[];billing?:{status:string;price_id:string;current_period_end:string;updated:string}};
-type Report={counts:{missedCallOpportunities:number;confirmedBookings:number;completedJobs:number;pendingFollowups:number;callsNeedingAttention:number};value:{openOpportunityCents:number;confirmedRevenueCents:number;confirmedRevenueStatus:'recorded'|'not_recorded';note:string}};
+type Report={counts:{missedCallOpportunities:number;confirmedBookings:number;recoveredBookings:number;completedJobs:number;pendingFollowups:number;callsNeedingAttention:number};value:{openOpportunityCents:number;confirmedRevenueCents:number;confirmedRevenueStatus:'recorded'|'not_recorded';note:string}};
 type Health={readyForPilot:boolean;configurationReady:boolean;configuration:Record<string,boolean>;configurationWarnings:string[];pilotBlockers:{label:string;nextAction:string}[];operations?:{queuedJobs:number;failedJobs:number;failedProviderEvents:number}};
 type Operations={jobs:Array<{id:string;kind:string;status:string;attempts:number;last_error:string;updated:string}>};
 const money=(n:number)=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(n/100);
