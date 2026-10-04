@@ -3,7 +3,7 @@ export const dynamic='force-dynamic';
 export async function GET(){
  const e=env as unknown as Record<string, unknown>;
  let database=false;const missingTables:string[]=[];
- try{const db=e.DB as D1Database;for(const table of ['workspaces','customers','bookings','voice_calls','subscriptions','subscription_events']){try{await db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).all();}catch{missingTables.push(table);}}database=missingTables.length===0;}catch{}
+ try{const db=e.DB as D1Database;for(const table of ['workspaces','customers','bookings','voice_calls','subscriptions','subscription_events','provider_events','jobs','audit_events']){try{await db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).all();}catch{missingTables.push(table);}}database=missingTables.length===0;}catch{}
  const configuration={twilio:Boolean(e.TWILIO_ACCOUNT_SID&&e.TWILIO_AUTH_TOKEN&&e.TWILIO_PHONE_NUMBER),ai:Boolean(e.OPENAI_API_KEY),aiBackup:Boolean(e.AI_BACKUP_API_KEY&&e.AI_BACKUP_BASE_URL),publicUrl:Boolean(e.PUBLIC_BASE_URL),billing:Boolean(e.STRIPE_SECRET_KEY&&e.STRIPE_PRICE_ID&&e.STRIPE_WEBHOOK_SECRET)};
  const configurationWarnings=[...Object.entries(configuration).filter(([,configured])=>!configured).map(([provider])=>`${provider} is not configured`),'provider verification and end-to-end delivery have not been completed'];
  const configurationReady=database&&configuration.twilio&&configuration.ai&&configuration.publicUrl;
