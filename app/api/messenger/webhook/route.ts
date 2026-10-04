@@ -1,4 +1,6 @@
 import { bindings } from '@/lib/telephony';
+import { database } from '@/db/database';
+import { recordProviderEvent } from '@/lib/reliability';
 export const dynamic='force-dynamic';
 
 async function validSignature(request: Request, raw: string) {
@@ -34,7 +36,29 @@ export async function POST(request: Request) {
       console.warn(`Messenger webhook ignored: unsupported object ${String(body.object || 'missing')}.`);
       return new Response('Ignored', { status: 200 });
     }
-    console.log(`Relay Messenger webhook received ${body.entry?.length || 0} page event(s).`);
+    const db = database();
+    let recorded = 0;
+    for (const entry of body.entry || []) {
+      if (!entry || typeof entry !== 'object') continue;
+      const pageEntry = entry as { id?: unknown; time?: unknown; messaging?: unknown[] };
+      for (const message of pageEntry.messaging || []) {
+        if (!message || typeof message !== 'object') continue;
+        const event = message as { message?: { mid?: unknown }; sender?: { id?: unknown }; recipient?: { id?: unknown }; timestamp?: unknown };
+        const mid = typeof event.message?.mid === 'string' ? event.message.mid : '';
+        const sender = typeof event.sender?.id === 'string' ? event.sender.id : '';
+        const recipient = typeof event.recipient?.id === 'string' ? event.recipient.id : '';
+        const timestamp = typeof event.timestamp === 'number' ? event.timestamp : pageEntry.time;
+        const id = mid || `page:${String(pageEntry.id || recipient)}:${sender}:${String(timestamp || '')}`;
+        const accepted = await recordProviderEvent(db, {
+          id: `meta:${id}`,
+          provider: 'meta',
+          eventType: 'page.messaging',
+          payload: { pageId: pageEntry.id || '', sender, recipient, timestamp, message },
+        });
+        if (accepted) recorded++;
+      }
+    }
+    console.log(`Relay Messenger webhook received ${body.entry?.length || 0} page event(s); recorded ${recorded} new event(s).`);
     return new Response('EVENT_RECEIVED', { status: 200 });
   } catch {
     console.warn('Messenger webhook rejected: invalid JSON.');
