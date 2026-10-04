@@ -1,5 +1,6 @@
 import { bindings } from '@/lib/telephony';
 import { database } from '@/db/database';
+import { recordProviderEvent, recordAudit } from '@/lib/reliability';
 export const dynamic='force-dynamic';
 type StripeEvent={id?:string;type?:string;data?:{object?:Record<string,unknown>}};
 const now=()=>new Date().toISOString();
@@ -21,6 +22,10 @@ export async function POST(request: Request) {
   try{event=JSON.parse(raw) as StripeEvent;}catch{return Response.json({error:'Invalid webhook payload.'},{status:400});}
   if(!event.id||!event.type||!event.data?.object)return Response.json({error:'Invalid webhook payload.'},{status:400});
   const db=database(), object=event.data.object, metadata=(object.metadata&&typeof object.metadata==='object'?object.metadata:{}) as Record<string,unknown>;
+  let reliabilityAvailable=true;
+  let reliabilityEventRecorded=false;
+  try { reliabilityEventRecorded=await recordProviderEvent(db,{id:event.id,provider:'stripe',eventType:event.type,payload:event}); } catch { reliabilityAvailable=false; /* migration not applied yet; legacy ledger below remains authoritative */ }
+  if(reliabilityAvailable&&!reliabilityEventRecorded){ return new Response(null,{status:204}); }
   const owner=text(metadata.owner);
   const subscriptionId=event.type==='checkout.session.completed'?text(object.subscription):text(object.id);
   const customerId=text(object.customer);
@@ -35,6 +40,7 @@ export async function POST(request: Request) {
   if(resolved && ['checkout.session.completed','customer.subscription.created','customer.subscription.updated','customer.subscription.deleted'].includes(event.type)){
     const nextStatus=event.type==='customer.subscription.deleted'?'canceled':status||'active';
     await db.prepare(`INSERT INTO subscriptions(owner,stripe_customer_id,stripe_subscription_id,status,price_id,current_period_end,updated) VALUES(?,?,?,?,?,?,?) ON CONFLICT(owner) DO UPDATE SET stripe_customer_id=excluded.stripe_customer_id,stripe_subscription_id=excluded.stripe_subscription_id,status=excluded.status,price_id=excluded.price_id,current_period_end=excluded.current_period_end,updated=excluded.updated`).bind(resolved,customerId,subscriptionId,nextStatus,priceId,periodEnd,now()).run();
+    try { await recordAudit(db,{id:`stripe:${event.id}`,workspace:undefined,actor:resolved,action:'subscription.updated',target:subscriptionId,metadata:{eventType:event.type,status:nextStatus}}); } catch { /* audit table is introduced by the reliability migration */ }
   }
   await db.prepare('INSERT OR IGNORE INTO subscription_events(id,created) VALUES(?,?)').bind(event.id,now()).run();
   return new Response(null, { status: 204 });
