@@ -22,6 +22,30 @@ export async function enqueueJob(db: D1Database, input: {
     .bind(input.id, input.workspace ?? null, input.kind, JSON.stringify(input.payload ?? {}), 'queued', 0, input.runAfter ?? now, '', now, now).run();
 }
 
+export async function claimReadyJobs(db: D1Database, limit = 10) {
+  const now = stamp();
+  const safeLimit = Math.max(1, Math.min(50, Math.floor(limit)));
+  const rows = await db.prepare("SELECT * FROM jobs WHERE status='queued' AND run_after<=? ORDER BY run_after,created LIMIT ?").bind(now, safeLimit).all<Record<string, unknown>>();
+  const claimed: Record<string, unknown>[] = [];
+  for (const row of rows.results) {
+    const result = await db.prepare("UPDATE jobs SET status='running',attempts=attempts+1,updated=? WHERE id=? AND status='queued'").bind(now, row.id).run();
+    if ((result.meta.changes ?? 0) > 0) claimed.push({...row, status:'running', attempts:Number(row.attempts||0)+1});
+  }
+  return claimed;
+}
+
+export async function completeJob(db: D1Database, jobId: string) {
+  await db.prepare("UPDATE jobs SET status='completed',last_error='',updated=? WHERE id=? AND status='running'").bind(stamp(), jobId).run();
+}
+
+export async function failJob(db: D1Database, jobId: string, attempt: number, error: unknown) {
+  const message = String(error instanceof Error ? error.message : error).slice(0, 1000);
+  const next = stamp();
+  const exhausted = attempt >= 5;
+  await db.prepare("UPDATE jobs SET status=?,run_after=?,last_error=?,updated=? WHERE id=? AND status='running'")
+    .bind(exhausted ? 'failed' : 'queued', exhausted ? next : new Date(Date.now()+retryDelay(attempt)).toISOString(), message, next, jobId).run();
+}
+
 export async function recordAudit(db: D1Database, input: {
   id: string; workspace?: string; actor: string; action: string; target?: string; metadata?: unknown;
 }) {

@@ -16,3 +16,5 @@ Before applying migration `0006_reliability_operations.sql`:
 3. Run schema, tenant-isolation, webhook, and restore tests.
 4. Confirm the live database can be rolled back or restored.
 5. Apply in production during an approved maintenance window.
+
+The job helpers claim work with a compare-and-set transition, cap each batch at 50, retry failures with exponential backoff, and mark jobs failed after five attempts. A scheduler must call them only after the migration and backup gates above are complete.
