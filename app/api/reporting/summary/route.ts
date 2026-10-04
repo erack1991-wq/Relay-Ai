@@ -21,10 +21,12 @@ export async function GET(request:Request){
     db.prepare("SELECT count(*) AS count FROM voice_calls WHERE workspace=? AND status='needs-attention'").bind(workspace).first<{count:number}>(),
   ]);
   const valueCents=Number(openValue?.cents||0);
+  let confirmedRevenueCents=0;let confirmedRevenueStatus='not_recorded';
+  try{const revenue=await db.prepare('SELECT COALESCE(SUM(CAST(amount AS INTEGER)),0) AS cents FROM completed_jobs WHERE workspace=?').bind(workspace).first<{cents:number}>();confirmedRevenueCents=Number(revenue?.cents||0);confirmedRevenueStatus='recorded';}catch{/* migration is intentionally gated; keep reporting honest until applied */}
   return Response.json({
     workspace,
     generatedAt:new Date().toISOString(),
     counts:{customers:Number(customers?.count||0),missedCallOpportunities:Number(missed?.count||0),confirmedBookings:Number(bookings?.count||0),completedJobs:Number(completed?.count||0),pendingFollowups:Number(followups?.count||0),callsNeedingAttention:Number(attention?.count||0)},
-    value:{openOpportunityCents:valueCents,confirmedRevenueCents:0,confirmedRevenueStatus:'not_recorded',note:'Open opportunity value is an estimate; confirmed revenue requires a completed job or billing record.'},
+    value:{openOpportunityCents:valueCents,confirmedRevenueCents,confirmedRevenueStatus,note:'Open opportunity value is an estimate; confirmed revenue is recorded only from completed-job entries.'},
   },{headers:{'Cache-Control':'no-store'}});
 }

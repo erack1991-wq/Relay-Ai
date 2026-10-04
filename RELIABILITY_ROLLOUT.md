@@ -7,6 +7,7 @@ They support:
 - `provider_events`: idempotent webhook receipt, retry state, and replay.
 - `jobs`: durable follow-up, notification, and provider work with backoff.
 - `audit_events`: workspace-scoped history for owner and support actions.
+- `completed_jobs`: explicit completed work and collected revenue attribution linked to a booking.
 
 Before applying migration `0006_reliability_operations.sql`:
 
