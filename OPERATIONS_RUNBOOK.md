@@ -6,6 +6,7 @@ Use this checklist before routing real customer traffic. Do not treat a successf
 
 ```powershell
 npm audit --omit=dev --audit-level=high
+npm run validate:providers
 npm run verify
 node scripts/check-readiness.mjs https://relay-business-workspace.epeazy2.chatgpt.site/api/health
 ```
@@ -24,6 +25,20 @@ Relay is not ready for customer traffic until all of these have evidence:
 - A Messenger webhook is verified, deduplicated, and handled under the intended page authorization.
 - A database backup exists and a restore has been tested in a safe environment.
 - Provider verification and backup timestamps are recorded in the deployment environment.
+
+### Supervised verification sequence
+
+Run these checks with an owner or operator watching the workspace. Use a dedicated test contact and test calendar slot; never use an unsuspecting customer.
+
+1. Call the Relay number and confirm the call is answered, the workspace is correct, and a lead is created.
+2. Provide explicit SMS consent, confirm one delivery, reply once, then send `STOP` and confirm later follow-up is blocked.
+3. Request an appointment, confirm the booking exists in the intended timezone, then repeat the same request and confirm no duplicate booking is created.
+4. Deliver one Stripe test webhook twice and confirm one state transition plus one duplicate/no-op result.
+5. Send one signed Meta test event twice and confirm one persisted provider event plus one duplicate/no-op result.
+6. Record only the test date, provider event IDs, booking ID, delivery status, and pass/fail result. Do not record message bodies or secrets.
+7. Record `PROVIDER_VERIFIED_AT` only after all applicable provider checks pass. Use an ISO-8601 timestamp from the completed test; never use a placeholder or future timestamp.
+
+If any step fails, preserve the lead and event for follow-up, leave readiness blocked, and fix the failing integration before repeating the test.
 
 ## Integration setup map
 

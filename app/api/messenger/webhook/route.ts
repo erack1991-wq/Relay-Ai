@@ -40,12 +40,17 @@ export async function POST(request: Request) {
     console.warn('Messenger webhook rejected: invalid or missing signature.');
     return new Response('Forbidden', { status: 403 });
   }
+  let body: { object?: string; entry?: unknown[] };
+  try { body = JSON.parse(raw) as { object?: string; entry?: unknown[] }; }
+  catch {
+    console.warn('Messenger webhook rejected: invalid JSON.');
+    return new Response('Invalid JSON', { status: 400 });
+  }
+  if (body.object !== 'page') {
+    console.warn(`Messenger webhook ignored: unsupported object ${String(body.object || 'missing')}.`);
+    return new Response('Ignored', { status: 200 });
+  }
   try {
-    const body = JSON.parse(raw) as { object?: string; entry?: unknown[] };
-    if (body.object !== 'page') {
-      console.warn(`Messenger webhook ignored: unsupported object ${String(body.object || 'missing')}.`);
-      return new Response('Ignored', { status: 200 });
-    }
     const db = database();
     let recorded = 0;
     for (const entry of body.entry || []) {
@@ -70,8 +75,8 @@ export async function POST(request: Request) {
     }
     console.log(`Relay Messenger webhook received ${body.entry?.length || 0} page event(s); recorded ${recorded} new event(s).`);
     return new Response('EVENT_RECEIVED', { status: 200 });
-  } catch {
-    console.warn('Messenger webhook rejected: invalid JSON.');
-    return new Response('Invalid JSON', { status: 400 });
+  } catch (error) {
+    console.error('Messenger webhook processing failed; provider retry is expected.', error instanceof Error ? error.message : 'unknown error');
+    return new Response('Temporary processing failure', { status: 500 });
   }
 }

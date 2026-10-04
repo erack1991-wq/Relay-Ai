@@ -8,7 +8,14 @@ console.log(`Relay readiness: ${body.readyForPilot ? 'READY' : 'NOT READY'}`);
 console.log(`Configuration: ${body.configurationReady ? 'ready' : 'incomplete'}`);
 console.log(`Database: ${body.databaseReachable ? 'reachable' : 'unavailable'}`);
 console.log(`Provider verification: ${body.providerVerification || 'unknown'}`);
-if (body.backup) console.log(`Backups: ${body.backup.lastVerifiedAt ? 'verified' : 'verification missing'}; restore drill: ${body.backup.restoreTestedAt ? 'tested' : 'missing'}`);
+if (body.backup) {
+  const evidence = (value) => {
+    if (!value) return 'missing';
+    const timestamp = Date.parse(value);
+    return Number.isFinite(timestamp) && timestamp <= Date.now() ? 'valid' : 'invalid';
+  };
+  console.log(`Backups: ${evidence(body.backup.lastVerifiedAt)}; restore drill: ${evidence(body.backup.restoreTestedAt)}`);
+}
 if (body.operations) console.log(`Operations: ${body.operations.queuedJobs || 0} queued, ${body.operations.failedJobs || 0} failed jobs, ${body.operations.failedProviderEvents || 0} failed provider events`);
 
 for (const warning of body.pilotWarnings || []) {
