@@ -18,7 +18,7 @@ export async function GET(request: Request) {
   if (!owner) return json({ error: 'Workspace not found.' }, 404);
   try {
     const [jobs] = await db.batch([
-      db.prepare("SELECT id,kind,status,attempts,run_after,last_error,created,updated FROM jobs WHERE workspace=? AND status IN ('queued','running','failed') ORDER BY updated DESC LIMIT 100").bind(workspace),
+      db.prepare("SELECT id,kind,status,attempts,run_after,last_error,created,updated FROM jobs WHERE workspace=? AND status IN ('queued','running','failed','dead_letter') ORDER BY updated DESC LIMIT 100").bind(workspace),
     ]);
     return json({ jobs: jobs.results, providerEvents: [], note: 'Provider events are intentionally omitted because the current schema does not associate them with a workspace.' });
   } catch (error) {

@@ -43,7 +43,7 @@ export async function failJob(db: D1Database, jobId: string, attempt: number, er
   const next = stamp();
   const exhausted = attempt >= 5;
   await db.prepare("UPDATE jobs SET status=?,run_after=?,last_error=?,updated=? WHERE id=? AND status='running'")
-    .bind(exhausted ? 'failed' : 'queued', exhausted ? next : new Date(Date.now()+retryDelay(attempt)).toISOString(), message, next, jobId).run();
+    .bind(exhausted ? 'dead_letter' : 'queued', exhausted ? next : new Date(Date.now()+retryDelay(attempt)).toISOString(), message, next, jobId).run();
 }
 
 export async function recordAudit(db: D1Database, input: {
