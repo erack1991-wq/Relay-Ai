@@ -19,6 +19,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Validate provider configuration contract
+        run: npm run validate:providers -- .dev.vars.example
       - run: npm test
       - run: npm run typecheck
       - run: npm run lint

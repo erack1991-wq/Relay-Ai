@@ -5,6 +5,10 @@ TWILIO_PHONE_NUMBER="+1xxxxxxxxxx"
 PUBLIC_BASE_URL="https://your-public-https-tunnel.example"
 OPENAI_API_KEY="sk-..."
 OPENAI_VOICE_MODEL="gpt-5-mini"
+# Stripe test-mode values for local checkout/webhook development.
+STRIPE_SECRET_KEY="sk_test_..."
+STRIPE_PRICE_ID="price_..."
+STRIPE_WEBHOOK_SECRET="whsec_..."
 # Optional OpenAI-compatible backup provider. Leave unset to use the primary only.
 AI_BACKUP_API_KEY=""
 AI_BACKUP_BASE_URL=""
