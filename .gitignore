@@ -47,3 +47,7 @@ next-env.d.ts
 /work/
 /cloudflared.exe
 /cloudflared*.log
+/backups/
+/relay-site-scorecard-deploy.tar
+/relay-publish-*.tar
+*.tsbuildinfo
