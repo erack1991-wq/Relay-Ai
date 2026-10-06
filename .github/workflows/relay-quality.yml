@@ -21,11 +21,11 @@ jobs:
       - run: npm ci
       - name: Validate provider configuration contract
         run: npm run validate:providers -- .dev.vars.example
-      - run: npm test
-      - run: npm run typecheck
-      - run: npm run lint
-      - run: npm run build
       - run: npm audit --audit-level=high
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+      - name: Run complete local verification
+        run: npm run verify:all
 
   secrets:
     runs-on: ubuntu-latest
