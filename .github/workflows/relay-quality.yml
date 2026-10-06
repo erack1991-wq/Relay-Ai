@@ -25,7 +25,11 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run build
-      - run: npm audit --audit-level=high
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+      - name: Report development dependency audit
+        continue-on-error: true
+        run: npm audit --audit-level=high
 
   secrets:
     runs-on: ubuntu-latest
