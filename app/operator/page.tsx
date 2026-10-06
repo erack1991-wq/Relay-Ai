@@ -10,13 +10,19 @@ export default function OperatorPage() {
   const [objective, setObjective] = useState('');
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState('');
 
   async function load() {
-    const response = await fetch('/api/operator/tasks', { cache: 'no-store' });
-    const body = await response.json() as { tasks?: Task[]; error?: string };
-    if (response.ok) setTasks(body.tasks || []);
-    else setMessage(body.error || 'Operator tasks are unavailable.');
-    setLoading(false);
+    try {
+      const response = await fetch('/api/operator/tasks', { cache: 'no-store' });
+      const body = await response.json() as { tasks?: Task[]; error?: string };
+      if (response.ok) setTasks(body.tasks || []);
+      else setMessage(body.error || 'Operator tasks are unavailable.');
+    } catch {
+      setMessage('Operator tasks could not be loaded. Try again shortly.');
+    } finally {
+      setLoading(false);
+    }
   }
   useEffect(() => { const timer = window.setTimeout(() => { void load(); }, 0); return () => window.clearTimeout(timer); }, []);
 
@@ -30,8 +36,16 @@ export default function OperatorPage() {
   }
 
   async function update(task: Task, status: string) {
-    const response = await fetch('/api/operator/tasks', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: task.id, status }) });
-    if (response.ok) await load(); else setMessage('Task update failed.');
+    if (busy) return;
+    setBusy(task.id);
+    try {
+      const response = await fetch('/api/operator/tasks', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: task.id, status }) });
+      if (response.ok) await load(); else setMessage('Task update failed.');
+    } catch {
+      setMessage('Task update failed. Try again shortly.');
+    } finally {
+      setBusy('');
+    }
   }
 
   return <main style={{ maxWidth: 1000, margin: '0 auto', padding: 40, fontFamily: 'Segoe UI, Arial, sans-serif', color: '#152520' }}>
@@ -52,7 +66,7 @@ export default function OperatorPage() {
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}><h2 style={{ margin: 0, fontSize: 20 }}>{task.title}</h2><span>{task.status}{task.approval === 'pending_owner' ? ' · approval needed' : ''}</span></div>
         <p>{task.objective}</p>
         {task.next_action && <p><strong>Next:</strong> {task.next_action}</p>}
-        <div style={{ display: 'flex', gap: 8 }}><button onClick={() => void update(task, 'in_progress')}>Start</button><button onClick={() => void update(task, 'blocked')}>Block</button><button onClick={() => void update(task, 'completed')}>Complete</button></div>
+        <div style={{ display: 'flex', gap: 8 }}><button disabled={busy === task.id} onClick={() => void update(task, 'in_progress')}>{busy === task.id ? 'Saving…' : 'Start'}</button><button disabled={busy === task.id} onClick={() => void update(task, 'blocked')}>Block</button><button disabled={busy === task.id} onClick={() => void update(task, 'completed')}>Complete</button></div>
       </article>)}
     </section>
   </main>;
