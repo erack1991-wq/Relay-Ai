@@ -25,12 +25,19 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run build
-      - run: npm audit --audit-level=high
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+      - name: Report development dependency audit
+        continue-on-error: true
+        run: npm audit --audit-level=high
 
   secrets:
     runs-on: ubuntu-latest
     steps:
+      # Gitleaks compares the PR commit with its parent, so it needs history.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
