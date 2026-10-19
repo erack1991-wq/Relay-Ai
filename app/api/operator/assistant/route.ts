@@ -45,6 +45,9 @@ export async function POST(request: Request) {
   if (!user) return json({ error: 'Authentication required.' }, 401);
   if (!sameOrigin(request)) return json({ error: 'Cross-site requests are not allowed.' }, 403);
   const values = env as unknown as Record<string, unknown>;
+  const allowedOwners = typeof values.OWNER_AI_ALLOWED_EMAILS === 'string' ? values.OWNER_AI_ALLOWED_EMAILS.split(',').map(value => value.trim().toLowerCase()).filter(Boolean) : [];
+  if (!allowedOwners.length) return json({ error: 'Owner AI is disabled until OWNER_AI_ALLOWED_EMAILS is configured on the server.' }, 503);
+  if (!allowedOwners.includes(user.email.toLowerCase())) return json({ error: 'Owner AI is restricted to configured owner accounts.' }, 403);
   const apiKey = typeof values.OPENAI_API_KEY === 'string' ? values.OPENAI_API_KEY : '';
   if (!apiKey) return json({ error: 'Owner AI is not configured. Add the server-side OPENAI_API_KEY setting.' }, 503);
 
@@ -77,14 +80,14 @@ export async function POST(request: Request) {
 
   const first = await callModel(messages);
   if (!first) return json({ error: 'The AI provider did not complete the request. Check the server configuration and try again.' }, 502);
-  const calls = (first.output || []).filter((item): item is ToolCall => item.type === 'function_call').slice(0, 3);
+  const calls = (first.output || []).filter((item): item is ToolCall => item.type === 'function_call');
   const toolsUsed: string[] = [];
   let final = first;
   if (calls.length) {
     const outputs = [];
-    for (const call of calls) {
-      const result = await runTool(call.name, call.arguments, user.userId);
-      toolsUsed.push(call.name);
+    for (const [index, call] of calls.entries()) {
+      const result = index < 3 ? await runTool(call.name, call.arguments, user.userId) : { error: 'Maximum of three read-only tool calls per request reached.' };
+      if (index < 3) toolsUsed.push(call.name);
       outputs.push({ type: 'function_call_output', call_id: call.call_id, output: JSON.stringify(result) });
     }
     const followUp = await callModel([...messages, ...(first.output || []), ...outputs]);
