@@ -51,7 +51,7 @@ export default function OperatorPage() {
   return <main style={{ maxWidth: 1000, margin: '0 auto', padding: 40, fontFamily: 'Segoe UI, Arial, sans-serif', color: '#152520' }}>
     <p style={{ color: '#587767', letterSpacing: 2, fontSize: 12, fontWeight: 700 }}>RELAY OPERATOR V1</p>
     <h1 style={{ fontSize: 38, marginBottom: 8 }}>Owner command center</h1>
-    <p style={{ color: '#63736a', marginBottom: 28 }}>Jarvis work stays visible, reversible, and approval-aware.</p>
+    <p style={{ color: '#63736a', marginBottom: 28 }}>Jarvis work stays visible, reversible, and approval-aware. <a href="/operator/assistant" style={{ color: '#164c3b', fontWeight: 700 }}>Open Owner AI preview →</a></p>
     <section style={{ border: '1px solid #dfe6df', borderRadius: 12, padding: 24, background: '#fff', marginBottom: 24 }}>
       <h2 style={{ marginTop: 0 }}>Add a goal</h2>
       <form onSubmit={create} style={{ display: 'grid', gap: 12 }}>
