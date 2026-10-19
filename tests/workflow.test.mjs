@@ -22,7 +22,7 @@ await build({
 });
 
 test('Relay customer-to-booking workflow and access boundaries', async t => {
-  const mf = new Miniflare({ modules: true, script: 'export default { fetch(){return new Response("test")} }', compatibilityDate: '2026-05-15', d1Databases: ['DB'] });
+  const mf = new Miniflare({ workers: [{ name: 'default', modules: true, script: 'export default { fetch(){return new Response("test")} }', d1Databases: { DB: 'DB' } }], compatibilityDate: '2026-05-15' });
   t.after(() => mf.dispose());
   const db = await mf.getD1Database('DB');
   for (const file of (await readdir('drizzle')).filter(n => n.endsWith('.sql')).sort()) {

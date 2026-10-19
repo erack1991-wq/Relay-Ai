@@ -12,7 +12,7 @@ await mkdir(resolve('.sites-runtime/tests'), { recursive: true });
 await build({ entryPoints: ['app/api/billing/webhook/route.ts'], outfile: output, bundle: true, platform: 'node', format: 'esm', logLevel: 'silent', plugins: [{ name: 'billing-runtime', setup(b) { b.onResolve({ filter: /^cloudflare:workers$/ }, args => ({ path: args.path, namespace: 'billing-runtime' })); b.onLoad({ filter: /.*/, namespace: 'billing-runtime' }, () => ({ contents: 'export const env=globalThis.__billingTest.env;' })); } }] });
 
 test('Stripe subscription webhooks persist state and are idempotent', async t => {
-  const mf = new Miniflare({ modules: true, script: 'export default {fetch(){return new Response("test")}}', compatibilityDate: '2026-05-15', d1Databases: ['DB'] });
+  const mf = new Miniflare({ workers: [{ name: 'default', modules: true, script: 'export default {fetch(){return new Response("test")}}', d1Databases: { DB: 'DB' } }], compatibilityDate: '2026-05-15' });
   t.after(() => mf.dispose());
   const db = await mf.getD1Database('DB');
   for (const file of (await readdir('drizzle')).filter(n => n.endsWith('.sql')).sort()) for (const sql of (await readFile(resolve('drizzle', file), 'utf8')).split('--> statement-breakpoint').map(s => s.trim()).filter(Boolean)) await db.prepare(sql).run();
