@@ -26,6 +26,7 @@ console.log('Policy: inspect, verify, and prepare reversible work; stop for secr
 
 for (const [label, command] of [
   ['provider configuration', ['npm', 'run', 'validate:providers']],
+  ['production dependency audit', ['npm', 'audit', '--omit=dev', '--audit-level=high']],
   ['full verification', ['npm', 'run', 'verify']],
 ]) {
   console.log(`\n=== ${label} ===`);
