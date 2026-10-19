@@ -23,8 +23,11 @@ jobs:
           node-version: '24'
           cache: npm
       - name: Generate repaired lockfile and verify
+        id: repair
+        continue-on-error: true
         run: node scripts/repair-sharp-security.mjs
       - name: Capture reviewed dependency patch
+        if: always()
         run: |
           git diff -- package.json package-lock.json > sharp-security-repair.patch
           test -s sharp-security-repair.patch
@@ -36,3 +39,10 @@ jobs:
           name: sharp-security-repair
           path: sharp-security-repair.patch
           if-no-files-found: error
+      - name: Enforce repair verification result
+        if: always()
+        run: |
+          if [ '${{ steps.repair.outcome }}' != 'success' ]; then
+            echo 'Repair verification failed; do not merge or deploy.' >&2
+            exit 1
+          fi
