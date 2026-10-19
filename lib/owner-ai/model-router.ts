@@ -51,7 +51,7 @@ export async function chatWithModel(
   if (!(provider in defaults)) throw new Error('Unknown model provider');
   const base = configuredUrl(provider, env);
   let url: string;
-  let headers: Record<string, string> = { 'content-type': 'application/json' };
+  const headers: Record<string, string> = { 'content-type': 'application/json' };
   let body: unknown;
   if (provider === 'openai') {
     if (!env.OPENAI_API_KEY) throw new Error('OpenAI is not configured');
@@ -83,10 +83,10 @@ export async function chatWithModel(
     method: 'POST', headers, body: JSON.stringify(body), signal: AbortSignal.timeout(30000),
   });
   if (!response.ok) throw new Error('Model provider request failed (' + response.status + ')');
-  const data: any = await response.json();
+  const data = await response.json() as { choices?: { message?: { content?: string } }[]; content?: { type?: string; text?: string }[]; candidates?: { content?: { parts?: { text?: string }[] } }[]; message?: { content?: string } };
   const text = provider === 'openai' ? data.choices?.[0]?.message?.content
-    : provider === 'anthropic' ? data.content?.filter((x: any) => x.type === 'text').map((x: any) => x.text).join('')
-    : provider === 'google' ? data.candidates?.[0]?.content?.parts?.map((x: any) => x.text || '').join('')
+    : provider === 'anthropic' ? data.content?.filter((x: { type?: string; text?: string }) => x.type === 'text').map((x: { type?: string; text?: string }) => x.text).join('')
+    : provider === 'google' ? data.candidates?.[0]?.content?.parts?.map((x: { type?: string; text?: string }) => x.text || '').join('')
     : data.message?.content;
   if (typeof text !== 'string') throw new Error('Model provider returned no text');
   return { provider, model: request.model, text };
