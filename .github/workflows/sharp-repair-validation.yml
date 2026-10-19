@@ -1,0 +1,34 @@
+name: Sharp security repair validation
+
+on:
+  push:
+    branches:
+      - feature/shared-owner-ai-foundation
+    paths:
+      - 'scripts/repair-sharp-security.mjs'
+      - '.github/workflows/sharp-repair-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Generate repaired lockfile and verify
+        run: node scripts/repair-sharp-security.mjs
+      - name: Capture reviewed dependency patch
+        run: git diff -- package.json package-lock.json > sharp-security-repair.patch
+      - name: Upload proposed repair for review
+        uses: actions/upload-artifact@v4
+        with:
+          name: sharp-security-repair
+          path: sharp-security-repair.patch
+          if-no-files-found: error
