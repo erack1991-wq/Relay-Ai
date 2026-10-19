@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit",
     "install:ci": "node scripts/install-ci.mjs",
     "dev": "node scripts/run-framework.mjs dev",
-    "build": "node scripts/run-framework.mjs build",
+    "build": "node scripts/run-framework.mjs build && node scripts/repair-wrangler-config.mjs",
     "readiness": "node scripts/check-readiness.mjs",
     "backup:verify": "node scripts/verify-local-backup.mjs",
     "validate:providers": "node scripts/validate-provider-config.mjs",
