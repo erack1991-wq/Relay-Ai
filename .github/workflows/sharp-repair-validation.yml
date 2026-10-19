@@ -25,8 +25,12 @@ jobs:
       - name: Generate repaired lockfile and verify
         run: node scripts/repair-sharp-security.mjs
       - name: Capture reviewed dependency patch
-        run: git diff -- package.json package-lock.json > sharp-security-repair.patch
+        run: |
+          git diff -- package.json package-lock.json > sharp-security-repair.patch
+          test -s sharp-security-repair.patch
+          git diff --check
       - name: Upload proposed repair for review
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: sharp-security-repair
