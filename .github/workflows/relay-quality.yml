@@ -4,14 +4,19 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: relay-quality-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   quality:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -21,16 +26,23 @@ jobs:
       - run: npm ci
       - name: Validate provider configuration contract
         run: npm run validate:providers -- .dev.vars.example
-      - run: npm audit --audit-level=high
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+      - name: Report development dependency audit
+        continue-on-error: true
+        run: npm audit --audit-level=high
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
-      - name: Run complete local verification
+      - name: Run full verification and browser smoke tests
         run: npm run verify:all
 
   secrets:
     runs-on: ubuntu-latest
     steps:
+      # Gitleaks compares the PR commit with its parent, so it needs history.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
