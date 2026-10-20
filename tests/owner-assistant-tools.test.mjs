@@ -11,12 +11,13 @@ await build({
   entryPoints: ['app/api/operator/assistant/route.ts'], outfile: output, bundle: true,
   platform: 'node', format: 'esm', logLevel: 'silent',
   plugins: [{ name: 'owner-assistant-runtime', setup(b) {
-    b.onResolve({ filter: /^cloudflare:workers$|^@\/app\/chatgpt-auth$|^@\/db\/database$|^@\/app\/api\/health\/route$/ }, args => ({ path: args.path, namespace: 'owner-assistant-test' }));
+    b.onResolve({ filter: /^cloudflare:workers$|^@\/app\/chatgpt-auth$|^@\/db\/database$|^@\/app\/api\/health\/route$|^@\/lib\/reliability$/ }, args => ({ path: args.path, namespace: 'owner-assistant-test' }));
     b.onLoad({ filter: /.*/, namespace: 'owner-assistant-test' }, args => ({ contents: ({
-      'cloudflare:workers': 'export const env = globalThis.ownerAssistantTest.env;',
+      'cloudflare:workers': 'export const env = new Proxy({}, {get(_target,key){return globalThis.ownerAssistantTest.env[key];}});',
       '@/app/chatgpt-auth': 'export async function getChatGPTUser(){return globalThis.ownerAssistantTest.user;}',
       '@/db/database': 'export function database(){return globalThis.ownerAssistantTest.db;}',
       '@/app/api/health/route': 'export async function GET(){return Response.json({});}',
+      '@/lib/reliability': 'export async function recordAudit(_db,input){globalThis.ownerAssistantTest.audit.push(input);}',
     })[args.path] }));
   } }],
 });
@@ -42,7 +43,7 @@ test('Owner AI can retrieve a task by ID while restricting the query to the sign
     method: 'POST', headers: { origin: 'https://relay.test', 'content-type': 'application/json' },
     body: JSON.stringify({ messages: [{ role: 'user', content: 'Tell me the details of this task.' }] }),
   }));
-  assert.equal(response.status, 200);
+  assert.equal(response.status, 200, await response.clone().text());
   assert.deepEqual(runtime.query.values, ['owner-123', taskId]);
   assert.match(runtime.query.sql, /WHERE owner=\? AND id=\?/);
   assert.equal(calls.length, 2);
@@ -156,4 +157,75 @@ test('Owner AI will not propose starting a task that is still pending approval',
   assert.deepEqual(result.toolsUsed, []);
   const toolOutput = calls[1].input.find(item => item.type === 'function_call_output' && item.call_id === 'pending-update-call');
   assert.deepEqual(JSON.parse(toolOutput.output), { error: 'This task must receive your approval in Operator before it can start.' });
+});
+
+test('Owner AI dispatches only the fixed quality workflow on main and audits the action', async () => {
+  const calls = [];
+  const githubRequests = [];
+  const runtime = globalThis.ownerAssistantTest = {
+    user: { userId: 'owner-123', email: 'owner@example.test' },
+    env: { OWNER_AI_ALLOWED_EMAILS: 'owner@example.test', OPENAI_API_KEY: 'test-key', OWNER_AI_GITHUB_ACTIONS_TOKEN: 'ghs_private_test', OWNER_AI_GITHUB_REPO: 'erack1991-wq/Relay-Ai' },
+    db: {}, audit: [],
+  };
+  const route = await import(pathToFileURL(output).href);
+  globalThis.fetch = async (url, init = {}) => {
+    if (String(url).includes('api.github.com')) {
+      githubRequests.push({ url: String(url), init });
+      return new Response(null, { status: 204 });
+    }
+    const request = JSON.parse(init.body);
+    calls.push(request);
+    if (calls.length === 1) {
+      assert.equal(request.tools.some(tool => tool.name === 'run_relay_quality_checks'), true);
+      return Response.json({ output: [{ type: 'function_call', name: 'run_relay_quality_checks', arguments: '{}', call_id: 'quality-call' }] });
+    }
+    const toolOutput = request.input.find(item => item.type === 'function_call_output' && item.call_id === 'quality-call');
+    assert.deepEqual(JSON.parse(toolOutput.output), {
+      dispatched: true,
+      repository: 'erack1991-wq/Relay-Ai',
+      workflow: 'Relay quality',
+      ref: 'main',
+      url: 'https://github.com/erack1991-wq/Relay-Ai/actions/workflows/relay-quality.yml',
+      deploys: false,
+      auditRecorded: true,
+    });
+    return Response.json({ output: [{ type: 'message', content: [{ type: 'output_text', text: 'Quality checks started on main. No deployment was started.' }] }] });
+  };
+  const response = await route.POST(new Request('https://relay.test/api/operator/assistant', {
+    method: 'POST', headers: { origin: 'https://relay.test', 'content-type': 'application/json' },
+    body: JSON.stringify({ messages: [{ role: 'user', content: 'Run Relay quality checks.' }] }),
+  }));
+  assert.equal(response.status, 200, await response.clone().text());
+  assert.deepEqual(JSON.parse(githubRequests[0].init.body), { ref: 'main' });
+  assert.match(githubRequests[0].url, /\/actions\/workflows\/relay-quality\.yml\/dispatches$/);
+  assert.equal(githubRequests[0].init.headers.Authorization, 'Bearer ghs_private_test');
+  assert.deepEqual(runtime.audit[0], { id: runtime.audit[0].id, actor: 'owner-123', action: 'operator.quality_checks_dispatched', target: 'erack1991-wq/Relay-Ai', metadata: { workflow: 'relay-quality.yml', ref: 'main' } });
+  assert.deepEqual((await response.json()).toolsUsed, ['run_relay_quality_checks']);
+});
+
+test('Owner AI does not call GitHub when the quality dispatch token is missing', async () => {
+  const calls = [];
+  let githubCalls = 0;
+  globalThis.ownerAssistantTest = {
+    user: { userId: 'owner-123', email: 'owner@example.test' },
+    env: { OWNER_AI_ALLOWED_EMAILS: 'owner@example.test', OPENAI_API_KEY: 'test-key' },
+    db: {}, audit: [],
+  };
+  const route = await import(pathToFileURL(output).href);
+  globalThis.fetch = async (url, init = {}) => {
+    if (String(url).includes('api.github.com')) { githubCalls += 1; throw new Error('GitHub should not be called'); }
+    const request = JSON.parse(init.body);
+    calls.push(request);
+    if (calls.length === 1) return Response.json({ output: [{ type: 'function_call', name: 'run_relay_quality_checks', arguments: '{}', call_id: 'quality-call' }] });
+    const toolOutput = request.input.find(item => item.type === 'function_call_output' && item.call_id === 'quality-call');
+    assert.match(JSON.parse(toolOutput.output).error, /OWNER_AI_GITHUB_ACTIONS_TOKEN/);
+    return Response.json({ output: [{ type: 'message', content: [{ type: 'output_text', text: 'The token needs configuration first.' }] }] });
+  };
+  const response = await route.POST(new Request('https://relay.test/api/operator/assistant', {
+    method: 'POST', headers: { origin: 'https://relay.test', 'content-type': 'application/json' },
+    body: JSON.stringify({ messages: [{ role: 'user', content: 'Run quality checks.' }] }),
+  }));
+  assert.equal(response.status, 200);
+  assert.equal(githubCalls, 0);
+  assert.deepEqual((await response.json()).toolsUsed, ['run_relay_quality_checks']);
 });
