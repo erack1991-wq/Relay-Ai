@@ -41,18 +41,35 @@ async function inspectRelayGitHub(repo: string) {
     ]);
     if (!pullResponse.ok || !runsResponse.ok) return { error: 'GitHub status is temporarily unavailable.', status: pullResponse.status === 403 || runsResponse.status === 403 ? 'rate_limited_or_forbidden' : 'unavailable' };
     const [pullData, runsData] = await Promise.all([pullResponse.json(), runsResponse.json()]) as [unknown, unknown];
-    const pulls = Array.isArray(pullData) ? pullData : [];
+    const pulls: unknown[] = Array.isArray(pullData) ? pullData : [];
     const runs = runsData && typeof runsData === 'object' && Array.isArray((runsData as { workflow_runs?: unknown }).workflow_runs) ? (runsData as { workflow_runs: unknown[] }).workflow_runs : [];
     return {
       repository: repo,
-      pullRequests: pulls.slice(0, 5).map((item: any) => ({
-        number: item.number, title: item.title, state: item.state, draft: item.draft,
-        branch: item.head?.ref, updatedAt: item.updated_at, url: item.html_url,
-      })),
-      workflowRuns: runs.slice(0, 5).map((item: any) => ({
-        name: item.name, event: item.event, status: item.status, conclusion: item.conclusion,
-        branch: item.head_branch, createdAt: item.created_at, url: item.html_url,
-      })),
+      pullRequests: pulls.slice(0, 5).map((value: unknown) => {
+        const item = value as Record<string, unknown>;
+        const head = item.head && typeof item.head === 'object' ? item.head as Record<string, unknown> : {};
+        return {
+          number: typeof item.number === 'number' ? item.number : null,
+          title: typeof item.title === 'string' ? item.title : 'Untitled pull request',
+          state: typeof item.state === 'string' ? item.state : 'unknown',
+          draft: item.draft === true,
+          branch: typeof head.ref === 'string' ? head.ref : null,
+          updatedAt: typeof item.updated_at === 'string' ? item.updated_at : null,
+          url: typeof item.html_url === 'string' ? item.html_url : null,
+        };
+      }),
+      workflowRuns: runs.slice(0, 5).map((value: unknown) => {
+        const item = value as Record<string, unknown>;
+        return {
+          name: typeof item.name === 'string' ? item.name : 'Workflow run',
+          event: typeof item.event === 'string' ? item.event : 'unknown',
+          status: typeof item.status === 'string' ? item.status : 'unknown',
+          conclusion: typeof item.conclusion === 'string' ? item.conclusion : null,
+          branch: typeof item.head_branch === 'string' ? item.head_branch : null,
+          createdAt: typeof item.created_at === 'string' ? item.created_at : null,
+          url: typeof item.html_url === 'string' ? item.html_url : null,
+        };
+      }),
     };
   } catch {
     return { error: 'GitHub status could not be fetched right now.' };
