@@ -59,12 +59,15 @@ export default function OperatorPage() {
     }
   }
 
-  async function update(task: Task, status: string) {
+  async function update(task: Task, status: string, approval?: 'approved' | 'rejected') {
     if (busy) return;
+    if (approval === 'approved' && !window.confirm(`Approve “${task.title}” and start tracking it? This only changes tracking state; it will not run code or make external changes.`)) return;
+    if (approval === 'rejected' && !window.confirm(`Reject “${task.title}” and cancel this proposed task?`)) return;
     setBusy(task.id);
+    setMessage('');
     try {
-      const response = await fetch('/api/operator/tasks', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: task.id, status }) });
-      if (response.ok) await load(); else setMessage('Task update failed.');
+      const response = await fetch('/api/operator/tasks', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: task.id, status, ...(approval ? { approval } : {}) }) });
+      if (response.ok) await load(); else { const body = await response.json() as { error?: string }; setMessage(body.error || 'Task update failed.'); }
     } catch {
       setMessage('Task update failed. Try again shortly.');
     } finally {
@@ -75,7 +78,7 @@ export default function OperatorPage() {
   return <main style={{ maxWidth: 1000, margin: '0 auto', padding: 40, fontFamily: 'Segoe UI, Arial, sans-serif', color: '#152520' }}>
     <p style={{ color: '#587767', letterSpacing: 2, fontSize: 12, fontWeight: 700 }}>RELAY OPERATOR V1</p>
     <h1 style={{ fontSize: 38, marginBottom: 8 }}>Owner command center</h1>
-    <p style={{ color: '#63736a', marginBottom: 28 }}>Jarvis work stays visible, reversible, and approval-aware.</p>
+    <p style={{ color: '#63736a', marginBottom: 28 }}>Jarvis work stays visible, reversible, and approval-aware. <a href="/operator/command" style={{ color: '#164c3b', fontWeight: 700 }}>Open Owner AI command center →</a> · <a href="/operator/assistant">Open chat only →</a></p>
     <section style={{ border: '1px solid #dfe6df', borderRadius: 12, padding: 24, background: '#fff', marginBottom: 24 }}>
       <h2 style={{ marginTop: 0 }}>Add a goal</h2>
       <form onSubmit={create} style={{ display: 'grid', gap: 12 }}>
@@ -106,7 +109,16 @@ export default function OperatorPage() {
           } catch { return <p>{task.result}</p>; }
         })()}
         {!task.result && task.next_action && <p><strong>Next:</strong> {task.next_action}</p>}
-        <div style={{ display: 'flex', gap: 8 }}><button disabled={busy === task.id} onClick={() => void update(task, 'in_progress')}>{busy === task.id ? 'Saving…' : 'Start'}</button><button disabled={busy === task.id} onClick={() => void update(task, 'blocked')}>Block</button><button disabled={busy === task.id} onClick={() => void update(task, 'completed')}>Complete</button></div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {task.approval === 'pending_owner' ? <>
+            <button disabled={busy === task.id} onClick={() => void update(task, 'in_progress', 'approved')}>{busy === task.id ? 'Saving…' : 'Approve & track'}</button>
+            <button disabled={busy === task.id} onClick={() => void update(task, 'cancelled', 'rejected')}>Reject proposal</button>
+          </> : task.approval === 'rejected' || task.status === 'cancelled' || task.status === 'completed' ? null : <>
+            <button disabled={busy === task.id} onClick={() => void update(task, 'in_progress')}>{busy === task.id ? 'Saving…' : 'Start tracking'}</button>
+            <button disabled={busy === task.id} onClick={() => void update(task, 'blocked')}>Block</button>
+            <button disabled={busy === task.id} onClick={() => void update(task, 'completed')}>Complete</button>
+          </>}
+        </div>
       </article>)}
     </section>
   </main>;
