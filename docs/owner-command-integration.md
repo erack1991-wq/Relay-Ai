@@ -12,10 +12,11 @@ The branch is reconciled with main commit `fc4b5184abb6e105d42fb479ecfdb4b0d3170
 
 1. Review and release PR #13 through the normal Relay release process. Do not deploy the standalone static archive over the main Relay Site.
 2. Verify server-side `OPENAI_API_KEY` and `OWNER_AI_ALLOWED_EMAILS` presence without displaying values. Do not copy credentials between Sites.
-3. Verify the existing Operator task/memory migrations are applied through the separately authorized migration procedure.
-4. Sign in as an allowed owner and open `/operator/command`. Confirm owner tasks load, send a read-only question, and inspect the returned tools and answer.
-5. Verify a non-owner remains denied. Verify missing configuration/storage is reported as unavailable, not an empty success.
-6. Only then update the standalone Site's activation message to live. Until verified, label it pending release.
+3. To enable owner-requested verification runs, store `OWNER_AI_GITHUB_ACTIONS_TOKEN` as a server secret using a fine-grained token scoped to the Relay repository with Actions write permission. The tool can dispatch only `relay-quality.yml` on `main`; it cannot deploy. Keep it unset to leave dispatch disabled.
+4. Verify the existing Operator task/memory migrations are applied through the separately authorized migration procedure.
+5. Sign in as an allowed owner and open `/operator/command`. Confirm owner tasks load, send a read-only question, and inspect the returned tools and answer.
+6. Verify a non-owner remains denied. Verify missing configuration/storage is reported as unavailable, not an empty success.
+7. Only then update the standalone Site's activation message to live. Until verified, label it pending release.
 
 The live `/operator/assistant` route returned 404 during this integration's initial inspection. This is release-preparation work, not evidence that production AI is active.
 
