@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 
 type Task = { id: string; title: string; objective: string; status: string; approval: string; next_action: string; result: string; updated: string };
+type Plan = { summary: string; steps: string[]; nextAction: string; approvalRequired: boolean; approvalReason: string };
 
 export default function OperatorPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -11,6 +12,7 @@ export default function OperatorPage() {
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState('');
+  const [creating, setCreating] = useState(false);
 
   async function load() {
     try {
@@ -28,11 +30,33 @@ export default function OperatorPage() {
 
   async function create(event: FormEvent) {
     event.preventDefault();
+    await queueGoal();
+  }
+
+  async function queueGoal(withPlan = false) {
+    if (creating) return;
+    setCreating(true);
     setMessage('');
-    const response = await fetch('/api/operator/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, objective }) });
-    const body = await response.json() as { id?: string; error?: string };
-    if (!response.ok) return setMessage(body.error || 'Could not create task.');
-    setTitle(''); setObjective(''); setMessage('Goal added to the Operator queue.'); await load();
+    try {
+      let plan: Plan | undefined;
+      if (withPlan) {
+        const planResponse = await fetch('/api/operator/plan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, objective }) });
+        const planBody = await planResponse.json() as { plan?: Plan; error?: string };
+        if (!planResponse.ok || !planBody.plan) { setMessage(planBody.error || 'Relay could not create a plan.'); return; }
+        plan = planBody.plan;
+      }
+      const response = await fetch('/api/operator/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+        title, objective,
+        ...(plan ? { approval: plan.approvalRequired ? 'pending_owner' : 'not_required', nextAction: plan.nextAction, result: JSON.stringify(plan) } : {}),
+      }) });
+      const body = await response.json() as { id?: string; error?: string };
+      if (!response.ok) { setMessage(body.error || 'Could not create task.'); return; }
+      setTitle(''); setObjective(''); setMessage(plan ? 'Plan saved to the Operator queue. Relay has not executed any steps.' : 'Goal added to the Operator queue.'); await load();
+    } catch {
+      setMessage('Relay could not save the goal. Try again shortly.');
+    } finally {
+      setCreating(false);
+    }
   }
 
   async function update(task: Task, status: string) {
@@ -57,7 +81,10 @@ export default function OperatorPage() {
       <form onSubmit={create} style={{ display: 'grid', gap: 12 }}>
         <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Goal title" required maxLength={160} style={{ padding: 12, border: '1px solid #cbd8cf', borderRadius: 8 }} />
         <textarea value={objective} onChange={e => setObjective(e.target.value)} placeholder="What should Relay accomplish?" required maxLength={4000} rows={4} style={{ padding: 12, border: '1px solid #cbd8cf', borderRadius: 8 }} />
-        <button type="submit" style={{ width: 'fit-content', padding: '11px 17px', border: 0, borderRadius: 8, background: '#164c3b', color: '#fff', fontWeight: 700 }}>Queue goal</button>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+          <button type="submit" disabled={creating} style={{ width: 'fit-content', padding: '11px 17px', border: 0, borderRadius: 8, background: '#164c3b', color: '#fff', fontWeight: 700 }}>{creating ? 'Working…' : 'Plan & queue'}</button>
+          <button type="button" disabled={creating} onClick={() => void queueGoal()} style={{ width: 'fit-content', padding: '11px 17px', border: '1px solid #cbd8cf', borderRadius: 8, background: '#fff', color: '#164c3b', fontWeight: 700 }}>Queue without a plan</button>
+        </div>
       </form>
     </section>
     {message && <p role="status">{message}</p>}
@@ -65,7 +92,20 @@ export default function OperatorPage() {
       {loading ? <p>Loading Operator tasks…</p> : tasks.length === 0 ? <p>No Operator goals yet.</p> : tasks.map(task => <article key={task.id} style={{ border: '1px solid #dfe6df', borderRadius: 12, padding: 20, background: '#fff' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}><h2 style={{ margin: 0, fontSize: 20 }}>{task.title}</h2><span>{task.status}{task.approval === 'pending_owner' ? ' · approval needed' : ''}</span></div>
         <p>{task.objective}</p>
-        {task.next_action && <p><strong>Next:</strong> {task.next_action}</p>}
+        {task.result && (() => {
+          try {
+            const plan = JSON.parse(task.result) as Plan;
+            if (!Array.isArray(plan.steps)) return <p>{task.result}</p>;
+            return <div style={{ background: '#f5f8f5', borderRadius: 8, padding: 14, margin: '12px 0' }}>
+              <p><strong>Plan:</strong> {plan.summary}</p>
+              <ol>{plan.steps.map((step, index) => <li key={`${task.id}-step-${index}`}>{step}</li>)}</ol>
+              {plan.approvalRequired && <p><strong>Owner approval required:</strong> {plan.approvalReason || 'Review before carrying out the plan.'}</p>}
+              <p><strong>Next:</strong> {plan.nextAction}</p>
+              <p style={{ color: '#63736a', marginBottom: 0 }}>Plan only; Relay has not executed these steps.</p>
+            </div>;
+          } catch { return <p>{task.result}</p>; }
+        })()}
+        {!task.result && task.next_action && <p><strong>Next:</strong> {task.next_action}</p>}
         <div style={{ display: 'flex', gap: 8 }}><button disabled={busy === task.id} onClick={() => void update(task, 'in_progress')}>{busy === task.id ? 'Saving…' : 'Start'}</button><button disabled={busy === task.id} onClick={() => void update(task, 'blocked')}>Block</button><button disabled={busy === task.id} onClick={() => void update(task, 'completed')}>Complete</button></div>
       </article>)}
     </section>
