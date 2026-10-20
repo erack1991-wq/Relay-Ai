@@ -3,6 +3,7 @@
 import { FormEvent, useState } from 'react';
 
 type Message = { role: 'user' | 'assistant'; content: string };
+type TaskProposal = { title: string; objective: string; nextAction: string };
 
 const starters = [
   'What operator tasks are still blocked?',
@@ -15,6 +16,8 @@ export default function OwnerAssistantPage() {
   const [draft, setDraft] = useState('');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
+  const [taskProposal, setTaskProposal] = useState<TaskProposal | null>(null);
+  const [queuePending, setQueuePending] = useState(false);
 
   async function send(text = draft) {
     const content = text.trim();
@@ -23,6 +26,7 @@ export default function OwnerAssistantPage() {
     setMessages(next);
     setDraft('');
     setError('');
+    setTaskProposal(null);
     setPending(true);
     try {
       const response = await fetch('/api/operator/assistant', {
@@ -30,10 +34,11 @@ export default function OwnerAssistantPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: next }),
       });
-      const body = await response.json() as { answer?: string; error?: string; toolsUsed?: string[] };
+      const body = await response.json() as { answer?: string; error?: string; toolsUsed?: string[]; taskProposal?: TaskProposal | null };
       if (!response.ok || !body.answer) throw new Error(body.error || 'Owner AI could not answer.');
-      const note = body.toolsUsed?.length ? `\\n\\nRead-only tools used: ${body.toolsUsed.join(', ')}.` : '';
+      const note = body.toolsUsed?.length ? `\\n\\nTools used: ${body.toolsUsed.join(', ')}.` : '';
       setMessages([...next, { role: 'assistant', content: body.answer + note }]);
+      setTaskProposal(body.taskProposal || null);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Owner AI could not answer. Try again.');
       setMessages(messages);
@@ -43,12 +48,33 @@ export default function OwnerAssistantPage() {
     }
   }
 
+  async function queueTask() {
+    if (!taskProposal || queuePending) return;
+    setQueuePending(true);
+    setError('');
+    try {
+      const response = await fetch('/api/operator/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: taskProposal.title, objective: taskProposal.objective, nextAction: taskProposal.nextAction, approval: 'pending_owner' }),
+      });
+      const body = await response.json() as { id?: string; error?: string };
+      if (!response.ok || !body.id) throw new Error(body.error || 'Could not add the task.');
+      setMessages(current => [...current, { role: 'assistant', content: 'Task added to Operator and marked pending your approval. It will not run automatically.' }]);
+      setTaskProposal(null);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Could not add the task.');
+    } finally {
+      setQueuePending(false);
+    }
+  }
+
   function submit(event: FormEvent) { event.preventDefault(); void send(); }
 
   return <main style={{ maxWidth: 920, margin: '0 auto', padding: '32px 20px', fontFamily: 'Segoe UI, Arial, sans-serif', color: '#152520' }}>
     <p style={{ color: '#587767', letterSpacing: 2, fontSize: 12, fontWeight: 700 }}>RELAY OWNER AI · PREVIEW</p>
     <h1 style={{ fontSize: 36, marginBottom: 8 }}>Work with Relay context</h1>
-    <p style={{ color: '#63736a', marginTop: 0 }}>Ask about saved decisions and operator tasks. This first version can read those records; it cannot make changes.</p>
+    <p style={{ color: '#63736a', marginTop: 0 }}>Ask about saved decisions and operator tasks, or ask Owner AI to draft a task. It only saves the task if you choose to add it, and it remains pending your approval.</p>
     <section aria-label="Conversation" style={{ minHeight: 300, maxHeight: '55vh', overflowY: 'auto', display: 'grid', alignContent: 'start', gap: 12, padding: 18, border: '1px solid #dfe6df', borderRadius: 12, background: '#f8faf8' }}>
       {messages.length === 0 ? <div>
         <p style={{ marginTop: 0 }}>Start with a question, or choose one:</p>
@@ -59,10 +85,18 @@ export default function OwnerAssistantPage() {
       {pending && <p role="status">Checking Relay context…</p>}
     </section>
     {error && <p role="alert" style={{ color: '#a12622' }}>{error}</p>}
+    {taskProposal && <section aria-label="Task proposal" style={{ marginTop: 14, padding: 16, border: '1px solid #b9cebf', borderRadius: 10, background: '#f1f7f2' }}>
+      <p style={{ marginTop: 0, fontWeight: 700 }}>Task proposal for your review</p>
+      <strong>{taskProposal.title}</strong>
+      <p>{taskProposal.objective}</p>
+      {taskProposal.nextAction && <p><strong>Next action:</strong> {taskProposal.nextAction}</p>}
+      <p style={{ color: '#63736a', fontSize: 13 }}>Saving adds it to Operator as pending your approval. It will not run automatically.</p>
+      <button type="button" onClick={() => void queueTask()} disabled={queuePending} style={{ padding: '10px 14px', border: 0, borderRadius: 8, background: '#164c3b', color: '#fff', fontWeight: 700 }}>{queuePending ? 'Adding…' : 'Add to Operator tasks'}</button>
+    </section>}
     <form onSubmit={submit} style={{ display: 'flex', gap: 10, marginTop: 14 }}>
       <input value={draft} onChange={event => setDraft(event.target.value)} maxLength={4000} placeholder="Ask about Relay tasks or saved decisions…" aria-label="Message Owner AI" style={{ flex: 1, minWidth: 0, padding: 13, border: '1px solid #cbd8cf', borderRadius: 8 }} />
       <button disabled={pending || !draft.trim()} type="submit" style={{ padding: '11px 18px', border: 0, borderRadius: 8, background: '#164c3b', color: '#fff', fontWeight: 700 }}>{pending ? 'Working…' : 'Send'}</button>
     </form>
-    <p style={{ color: '#63736a', fontSize: 13 }}>Your provider key stays on the server. Chat history stays in this browser session only; each request is sent with storage disabled.</p>
+    <p style={{ color: '#63736a', fontSize: 13 }}>Your provider key stays on the server. Chat history stays in this browser session only; each request is sent with storage disabled. Task proposals are saved only when you choose to add them, and always remain pending your approval.</p>
   </main>;
 }
