@@ -1,9 +1,12 @@
 'use client';
 
 import { FormEvent, useEffect, useState } from 'react';
+import ImprovementQueue from '../improvement-queue';
 
 type Task = { id: string; title: string; objective: string; status: string; approval: string; next_action: string; result: string; updated: string };
 type Plan = { summary: string; steps: string[]; nextAction: string; approvalRequired: boolean; approvalReason: string };
+type Health = { readyForPilot: boolean; pilotBlockers?: { label: string; nextAction: string }[]; operations?: { failedJobs: number; failedProviderEvents: number } };
+type Report = { counts: { missedCallOpportunities: number; pendingFollowups: number; callsNeedingAttention: number } };
 
 export default function OperatorPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -13,6 +16,8 @@ export default function OperatorPage() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState('');
   const [creating, setCreating] = useState(false);
+  const [health, setHealth] = useState<Health | null>(null);
+  const [report, setReport] = useState<Report | null>(null);
 
   async function load() {
     try {
@@ -20,6 +25,12 @@ export default function OperatorPage() {
       const body = await response.json() as { tasks?: Task[]; error?: string };
       if (response.ok) setTasks(body.tasks || []);
       else setMessage(body.error || 'Operator tasks are unavailable.');
+      const [healthResponse, reportResponse] = await Promise.all([
+        fetch('/api/health', { cache: 'no-store' }),
+        fetch('/api/reporting/summary', { cache: 'no-store' }),
+      ]);
+      if (healthResponse.ok) setHealth(await healthResponse.json() as Health);
+      if (reportResponse.ok) setReport(await reportResponse.json() as Report);
     } catch {
       setMessage('Operator tasks could not be loaded. Try again shortly.');
     } finally {
@@ -79,6 +90,7 @@ export default function OperatorPage() {
     <p style={{ color: '#587767', letterSpacing: 2, fontSize: 12, fontWeight: 700 }}>RELAY OPERATOR V1</p>
     <h1 style={{ fontSize: 38, marginBottom: 8 }}>Owner command center</h1>
     <p style={{ color: '#63736a', marginBottom: 28 }}>Jarvis work stays visible, reversible, and approval-aware. <a href="/operator/command" style={{ color: '#164c3b', fontWeight: 700 }}>Open Owner AI command center →</a> · <a href="/operator/assistant">Open chat only →</a></p>
+    <ImprovementQueue health={health} report={report} pending={tasks.filter(task => task.status !== 'completed' && task.status !== 'cancelled').length} openItems={report?.counts.missedCallOpportunities ?? 0} />
     <section style={{ border: '1px solid #dfe6df', borderRadius: 12, padding: 24, background: '#fff', marginBottom: 24 }}>
       <h2 style={{ marginTop: 0 }}>Add a goal</h2>
       <form onSubmit={create} style={{ display: 'grid', gap: 12 }}>
