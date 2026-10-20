@@ -6,6 +6,8 @@ PUBLIC_BASE_URL="https://your-public-https-tunnel.example"
 OPENAI_API_KEY="sk-..."
 OWNER_AI_ALLOWED_EMAILS="owner@example.com"
 OWNER_AI_MODEL="gpt-5-mini"
+# Optional public GitHub repository for read-only PR and CI status.
+OWNER_AI_GITHUB_REPO="erack1991-wq/Relay-Ai"
 OPENAI_VOICE_MODEL="gpt-5-mini"
 # Stripe test-mode values for local checkout/webhook development.
 STRIPE_SECRET_KEY="sk_test_..."
