@@ -1,6 +1,6 @@
-import { getChatGPTUser } from '@/app/chatgpt-auth';
 import { database } from '@/db/database';
 import { recordAudit } from '@/lib/reliability';
+import { getOperatorUser } from '@/lib/operator-auth';
 
 export const dynamic = 'force-dynamic';
 const allowedStatuses = new Set(['queued', 'in_progress', 'blocked', 'completed', 'cancelled']);
@@ -10,8 +10,9 @@ function id() { return `op_${crypto.randomUUID()}`; }
 function sameOrigin(request: Request) { return request.headers.get('origin') === new URL(request.url).origin; }
 
 export async function GET() {
-  const user = await getChatGPTUser();
-  if (!user) return json({ error: 'Authentication required.' }, 401);
+  const auth = await getOperatorUser();
+  if (!auth.user) return json({ error: auth.error }, auth.status);
+  const user = auth.user;
   try {
     const rows = await database().prepare('SELECT id,title,objective,status,approval,next_action,result,created,updated FROM operator_tasks WHERE owner=? ORDER BY CASE status WHEN \'in_progress\' THEN 0 WHEN \'queued\' THEN 1 WHEN \'blocked\' THEN 2 ELSE 3 END, updated DESC LIMIT 100').bind(user.userId).all();
     return json({ tasks: rows.results });
@@ -22,10 +23,11 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const user = await getChatGPTUser();
-  if (!user) return json({ error: 'Authentication required.' }, 401);
+  const auth = await getOperatorUser();
+  if (!auth.user) return json({ error: auth.error }, auth.status);
+  const user = auth.user;
   if (!sameOrigin(request)) return json({ error: 'Cross-site requests are not allowed.' }, 403);
-  let body: { title?: unknown; objective?: unknown; approval?: unknown; nextAction?: unknown };
+  let body: { title?: unknown; objective?: unknown; approval?: unknown; nextAction?: unknown; result?: unknown };
   try { body = JSON.parse(await request.text()); } catch { return json({ error: 'Invalid request body.' }, 400); }
   if (typeof body.title !== 'string' || body.title.trim().length < 2 || body.title.length > 160) return json({ error: 'A title between 2 and 160 characters is required.' }, 400);
   if (typeof body.objective !== 'string' || body.objective.trim().length < 2 || body.objective.length > 4000) return json({ error: 'An objective between 2 and 4000 characters is required.' }, 400);
@@ -34,7 +36,7 @@ export async function POST(request: Request) {
   const taskId = id();
   const now = new Date().toISOString();
   try {
-    await database().prepare('INSERT INTO operator_tasks(id,owner,title,objective,status,approval,next_action,result,created,updated) VALUES(?,?,?,?,?,?,?,?,?,?)').bind(taskId, user.userId, body.title.trim(), body.objective.trim(), 'queued', approval, typeof body.nextAction === 'string' ? body.nextAction.trim().slice(0, 1000) : '', '', now, now).run();
+    await database().prepare('INSERT INTO operator_tasks(id,owner,title,objective,status,approval,next_action,result,created,updated) VALUES(?,?,?,?,?,?,?,?,?,?)').bind(taskId, user.userId, body.title.trim(), body.objective.trim(), 'queued', approval, typeof body.nextAction === 'string' ? body.nextAction.trim().slice(0, 1000) : '', typeof body.result === 'string' ? body.result.slice(0, 4000) : '', now, now).run();
     try { await recordAudit(database(), { id: crypto.randomUUID(), actor: user.userId, action: 'operator.task_created', target: taskId, metadata: { approval } }); } catch {}
     return json({ id: taskId, status: 'queued', approval }, 201);
   } catch (error) {
@@ -44,8 +46,9 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const user = await getChatGPTUser();
-  if (!user) return json({ error: 'Authentication required.' }, 401);
+  const auth = await getOperatorUser();
+  if (!auth.user) return json({ error: auth.error }, auth.status);
+  const user = auth.user;
   if (!sameOrigin(request)) return json({ error: 'Cross-site requests are not allowed.' }, 403);
   let body: { id?: unknown; status?: unknown; approval?: unknown; nextAction?: unknown; result?: unknown };
   try { body = JSON.parse(await request.text()); } catch { return json({ error: 'Invalid request body.' }, 400); }
