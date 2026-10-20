@@ -78,18 +78,19 @@ export default function OwnerAssistant({ embedded = false }: { embedded?: boolea
   }
 
   async function applyTaskUpdate() {
-    if (!taskUpdateProposal || queuePending) return;
+    const proposal = taskUpdateProposal;
+    if (!proposal || queuePending) return;
     setQueuePending(true);
     setError('');
     try {
       const response = await fetch('/api/operator/tasks', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: taskUpdateProposal.taskId, status: taskUpdateProposal.status, ...(taskUpdateProposal.nextAction !== undefined ? { nextAction: taskUpdateProposal.nextAction } : {}), ...(taskUpdateProposal.result !== undefined ? { result: taskUpdateProposal.result } : {}) }),
+        body: JSON.stringify({ id: proposal.taskId, status: proposal.status, ...(proposal.nextAction !== undefined ? { nextAction: proposal.nextAction } : {}), ...(proposal.result !== undefined ? { result: proposal.result } : {}) }),
       });
       const body = await response.json() as { ok?: boolean; error?: string; status?: string };
       if (!response.ok || !body.ok) throw new Error(body.error || 'Could not update the task.');
-      setMessages(current => [...current, { role: 'assistant', content: 'You confirmed the update. Task ' + taskUpdateProposal.taskId + ' is now ' + (body.status || taskUpdateProposal.status) + '.' }]);
+      setMessages(current => [...current, { role: 'assistant', content: 'You confirmed the update. Task ' + proposal.taskId + ' is now ' + (body.status || proposal.status) + '.' }]);
       setTaskUpdateProposal(null);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Could not update the task.');
@@ -117,12 +118,13 @@ export default function OwnerAssistant({ embedded = false }: { embedded?: boolea
     {taskUpdateProposal && <section aria-label="Task update proposal" style={{ marginTop: 14, padding: 16, border: '1px solid #d8b679', borderRadius: 10, background: '#fff9ed' }}>
       <p style={{ marginTop: 0, fontWeight: 700 }}>Task update for your confirmation</p>
       <strong>{taskUpdateProposal.title || 'Operator task'}</strong>
-      <p>Task ID: <code>{taskUpdateProposal.taskId}</code></p>
-      <p>Status: {taskUpdateProposal.currentStatus || 'unknown'} → <strong>{taskUpdateProposal.status}</strong></p>
-      {taskUpdateProposal.nextAction !== undefined && <p><strong>Next action:</strong> {taskUpdateProposal.nextAction || '(clear next action)'}</p>}
-      {taskUpdateProposal.result !== undefined && <p><strong>Result:</strong> {taskUpdateProposal.result}</p>}
+      <p>Task ID: <code>{proposal.taskId}</code></p>
+      <p>Status: {taskUpdateProposal.currentStatus || 'unknown'} → <strong>{proposal.status}</strong></p>
+      {proposal.nextAction !== undefined && <p><strong>Next action:</strong> {proposal.nextAction || '(clear next action)'}</p>}
+      {proposal.result !== undefined && <p><strong>Result:</strong> {proposal.result}</p>}
       <p style={{ color: '#63736a', fontSize: 13 }}>Nothing changes until you confirm. Relay will recheck the task and approval rules when saving.</p>
       <button type="button" onClick={() => void applyTaskUpdate()} disabled={queuePending} style={{ padding: '10px 14px', border: 0, borderRadius: 8, background: '#164c3b', color: '#fff', fontWeight: 700 }}>{queuePending ? 'Updating…' : 'Confirm task update'}</button>
+      <button type="button" onClick={() => setTaskUpdateProposal(null)} disabled={queuePending} style={{ marginLeft: 8, padding: '10px 14px', border: '1px solid #b9c7bc', borderRadius: 8, background: '#fff', color: '#152520' }}>Dismiss</button>
     </section>}
     {taskProposal && <section aria-label="Task proposal" style={{ marginTop: 14, padding: 16, border: '1px solid #b9cebf', borderRadius: 10, background: '#f1f7f2' }}>
       <p style={{ marginTop: 0, fontWeight: 700 }}>Task proposal for your review</p>

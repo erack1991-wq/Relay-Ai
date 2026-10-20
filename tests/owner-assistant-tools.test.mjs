@@ -86,10 +86,19 @@ test('Owner AI returns a task update for confirmation and does not write it', as
     user: { userId: 'owner-123', email: 'owner@example.test' },
     env: { OWNER_AI_ALLOWED_EMAILS: 'owner@example.test', OPENAI_API_KEY: 'test-key' },
     queries: [],
-    db: { prepare(sql) { return { bind(...values) { runtime.queries.push({ sql, values }); return {
-      first: async () => task,
-      run: async () => { writes.push(sql); return { meta: { changes: 1 } }; },
-    }; } }; },
+    db: {
+      prepare(sql) {
+        return {
+          bind(...values) {
+            runtime.queries.push({ sql, values });
+            return {
+              first: async () => task,
+              run: async () => { writes.push(sql); return { meta: { changes: 1 } }; },
+            };
+          },
+        };
+      },
+    },
   };
   const route = await import(pathToFileURL(output).href);
   globalThis.fetch = async (_url, init) => {
@@ -120,7 +129,15 @@ test('Owner AI will not propose starting a task that is still pending approval',
   const runtime = globalThis.ownerAssistantTest = {
     user: { userId: 'owner-123', email: 'owner@example.test' },
     env: { OWNER_AI_ALLOWED_EMAILS: 'owner@example.test', OPENAI_API_KEY: 'test-key' },
-    db: { prepare(sql) { return { bind(...values) { return { first: async () => task }; } }; },
+    db: {
+      prepare(_sql) {
+        return {
+          bind(..._values) {
+            return { first: async () => task };
+          },
+        };
+      },
+    },
   };
   const route = await import(pathToFileURL(output).href);
   globalThis.fetch = async (_url, init) => {
