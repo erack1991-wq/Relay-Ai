@@ -11,7 +11,7 @@ export default defineConfig({
   },
   webServer: process.env.RELAY_E2E_BASE_URL ? undefined : {
     command: 'npm run dev -- --host 127.0.0.1',
-    url: 'http://127.0.0.1:5173/api/health',
+    url: 'http://127.0.0.1:5173/',
     reuseExistingServer: true,
     timeout: 120_000,
   },

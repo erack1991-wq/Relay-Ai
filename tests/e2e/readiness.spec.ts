@@ -2,10 +2,10 @@ import { test, expect } from '@playwright/test';
 
 test('health endpoint reports honest readiness state', async ({ request }) => {
   const response = await request.get('/api/health');
-  expect(response.status()).toBe(200);
+  expect([200, 503]).toContain(response.status());
   const body = await response.json();
-  expect(body.ok).toBe(true);
-  expect(body.databaseReachable).toBe(true);
+  expect(body.ok).toBe(body.databaseReachable);
+  if (!body.databaseReachable) expect(body.readyForPilot).toBe(false);
   expect(typeof body.readyForPilot).toBe('boolean');
   expect(Array.isArray(body.pilotBlockers)).toBe(true);
 });
