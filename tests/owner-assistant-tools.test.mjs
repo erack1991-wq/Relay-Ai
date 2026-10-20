@@ -76,3 +76,67 @@ test('Owner AI rejects malformed task IDs before querying task storage', async (
   assert.equal(response.status, 200);
   assert.equal(queryCount, 0);
 });
+
+test('Owner AI returns a task update for confirmation and does not write it', async () => {
+  const taskId = 'op_123e4567-e89b-12d3-a456-426614174000';
+  const task = { id: taskId, title: 'Run verification', objective: 'Check Relay changes', status: 'queued', approval: 'not_required', next_action: '', result: '', created: '2026-10-01T00:00:00.000Z', updated: '2026-10-01T00:00:00.000Z' };
+  const calls = [];
+  const writes = [];
+  const runtime = globalThis.ownerAssistantTest = {
+    user: { userId: 'owner-123', email: 'owner@example.test' },
+    env: { OWNER_AI_ALLOWED_EMAILS: 'owner@example.test', OPENAI_API_KEY: 'test-key' },
+    queries: [],
+    db: { prepare(sql) { return { bind(...values) { runtime.queries.push({ sql, values }); return {
+      first: async () => task,
+      run: async () => { writes.push(sql); return { meta: { changes: 1 } }; },
+    }; } }; },
+  };
+  const route = await import(pathToFileURL(output).href);
+  globalThis.fetch = async (_url, init) => {
+    const request = JSON.parse(init.body);
+    calls.push(request);
+    if (calls.length === 1) return Response.json({ output: [{ type: 'function_call', name: 'propose_operator_task_update', arguments: JSON.stringify({ taskId, status: 'in_progress', nextAction: 'Run the Relay verification checks.' }), call_id: 'update-call' }] });
+    return Response.json({ output: [{ type: 'message', content: [{ type: 'output_text', text: 'I prepared the status update for your confirmation.' }] }] });
+  };
+  const response = await route.POST(new Request('https://relay.test/api/operator/assistant', {
+    method: 'POST', headers: { origin: 'https://relay.test', 'content-type': 'application/json' },
+    body: JSON.stringify({ messages: [{ role: 'user', content: 'Start the verification task.' }] }),
+  }));
+  assert.equal(response.status, 200);
+  const result = await response.json();
+  assert.deepEqual(result.taskUpdateProposal, { taskId, status: 'in_progress', nextAction: 'Run the Relay verification checks.', title: 'Run verification', currentStatus: 'queued' });
+  assert.deepEqual(result.toolsUsed, ['propose_operator_task_update']);
+  assert.equal(runtime.queries.length, 1);
+  assert.deepEqual(runtime.queries[0].values, ['owner-123', taskId]);
+  assert.equal(writes.length, 0, 'the assistant only prepares a proposal');
+  const toolOutput = calls[1].input.find(item => item.type === 'function_call_output' && item.call_id === 'update-call');
+  assert.deepEqual(JSON.parse(toolOutput.output), { proposal: result.taskUpdateProposal, requiresOwnerConfirmation: true, changesSaved: false });
+});
+
+test('Owner AI will not propose starting a task that is still pending approval', async () => {
+  const taskId = 'op_123e4567-e89b-12d3-a456-426614174000';
+  const task = { id: taskId, title: 'Approval-gated task', status: 'queued', approval: 'pending_owner' };
+  const calls = [];
+  const runtime = globalThis.ownerAssistantTest = {
+    user: { userId: 'owner-123', email: 'owner@example.test' },
+    env: { OWNER_AI_ALLOWED_EMAILS: 'owner@example.test', OPENAI_API_KEY: 'test-key' },
+    db: { prepare(sql) { return { bind(...values) { return { first: async () => task }; } }; },
+  };
+  const route = await import(pathToFileURL(output).href);
+  globalThis.fetch = async (_url, init) => {
+    const request = JSON.parse(init.body);
+    calls.push(request);
+    if (calls.length === 1) return Response.json({ output: [{ type: 'function_call', name: 'propose_operator_task_update', arguments: JSON.stringify({ taskId, status: 'in_progress' }), call_id: 'pending-update-call' }] });
+    return Response.json({ output: [{ type: 'message', content: [{ type: 'output_text', text: 'The task needs your approval first.' }] }] });
+  };
+  const response = await route.POST(new Request('https://relay.test/api/operator/assistant', {
+    method: 'POST', headers: { origin: 'https://relay.test', 'content-type': 'application/json' },
+    body: JSON.stringify({ messages: [{ role: 'user', content: 'Start the task.' }] }),
+  }));
+  assert.equal(response.status, 200);
+  const result = await response.json();
+  assert.equal(result.taskUpdateProposal, null);
+  assert.deepEqual(result.toolsUsed, []);
+  const toolOutput = calls[1].input.find(item => item.type === 'function_call_output' && item.call_id === 'pending-update-call');
+  assert.deepEqual(JSON.parse(toolOutput.output), { error: 'This task must receive your approval in Operator before it can start.' });
+});
