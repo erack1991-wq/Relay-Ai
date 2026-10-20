@@ -5,6 +5,7 @@ TWILIO_PHONE_NUMBER="+1xxxxxxxxxx"
 PUBLIC_BASE_URL="https://your-public-https-tunnel.example"
 OPENAI_API_KEY="sk-..."
 OPENAI_VOICE_MODEL="gpt-5-mini"
+RELAY_OWNER_EMAIL="owner@example.com"
 # Stripe test-mode values for local checkout/webhook development.
 STRIPE_SECRET_KEY="sk_test_..."
 STRIPE_PRICE_ID="price_..."
