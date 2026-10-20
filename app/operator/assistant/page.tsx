@@ -10,6 +10,8 @@ const starters = [
   'What decisions have we saved about Relay?',
   'What should we tackle next in the owner AI?',
   'What is the status of Relay’s open GitHub PRs and CI?',
+  'Where in the code is Twilio configured?',
+  'Summarize the changes in PR #13.',
 ];
 
 export default function OwnerAssistantPage() {
@@ -75,7 +77,7 @@ export default function OwnerAssistantPage() {
   return <main style={{ maxWidth: 920, margin: '0 auto', padding: '32px 20px', fontFamily: 'Segoe UI, Arial, sans-serif', color: '#152520' }}>
     <p style={{ color: '#587767', letterSpacing: 2, fontSize: 12, fontWeight: 700 }}>RELAY OWNER AI · PREVIEW</p>
     <h1 style={{ fontSize: 36, marginBottom: 8 }}>Work with Relay context</h1>
-    <p style={{ color: '#63736a', marginTop: 0 }}>Ask about saved decisions, operator tasks, or the public Relay GitHub and CI status. Owner AI can draft a task; it only saves the task if you choose to add it, and it remains pending your approval.</p>
+    <p style={{ color: '#63736a', marginTop: 0 }}>Ask about saved decisions, operator tasks, Relay source code, pull request changes, and public GitHub or CI status. Owner AI can draft a task; it only saves the task if you choose to add it, and it remains pending your approval.</p>
     <section aria-label="Conversation" style={{ minHeight: 300, maxHeight: '55vh', overflowY: 'auto', display: 'grid', alignContent: 'start', gap: 12, padding: 18, border: '1px solid #dfe6df', borderRadius: 12, background: '#f8faf8' }}>
       {messages.length === 0 ? <div>
         <p style={{ marginTop: 0 }}>Start with a question, or choose one:</p>
@@ -95,7 +97,7 @@ export default function OwnerAssistantPage() {
       <button type="button" onClick={() => void queueTask()} disabled={queuePending} style={{ padding: '10px 14px', border: 0, borderRadius: 8, background: '#164c3b', color: '#fff', fontWeight: 700 }}>{queuePending ? 'Adding…' : 'Add to Operator tasks'}</button>
     </section>}
     <form onSubmit={submit} style={{ display: 'flex', gap: 10, marginTop: 14 }}>
-      <input value={draft} onChange={event => setDraft(event.target.value)} maxLength={4000} placeholder="Ask about Relay tasks, decisions, GitHub, or CI…" aria-label="Message Owner AI" style={{ flex: 1, minWidth: 0, padding: 13, border: '1px solid #cbd8cf', borderRadius: 8 }} />
+      <input value={draft} onChange={event => setDraft(event.target.value)} maxLength={4000} placeholder="Ask about Relay tasks, code, decisions, GitHub, or CI…" aria-label="Message Owner AI" style={{ flex: 1, minWidth: 0, padding: 13, border: '1px solid #cbd8cf', borderRadius: 8 }} />
       <button disabled={pending || !draft.trim()} type="submit" style={{ padding: '11px 18px', border: 0, borderRadius: 8, background: '#164c3b', color: '#fff', fontWeight: 700 }}>{pending ? 'Working…' : 'Send'}</button>
     </form>
     <p style={{ color: '#63736a', fontSize: 13 }}>Your provider key stays on the server. Chat history stays in this browser session only; each request is sent with storage disabled. Task proposals are saved only when you choose to add them, and always remain pending your approval.</p>
