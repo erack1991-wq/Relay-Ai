@@ -9,6 +9,7 @@ OWNER_AI_MODEL="gpt-5-mini"
 # Optional public GitHub repository for read-only PR and CI status.
 OWNER_AI_GITHUB_REPO="erack1991-wq/Relay-Ai"
 OPENAI_VOICE_MODEL="gpt-5-mini"
+RELAY_OWNER_EMAIL="owner@example.com"
 # Stripe test-mode values for local checkout/webhook development.
 STRIPE_SECRET_KEY="sk_test_..."
 STRIPE_PRICE_ID="price_..."

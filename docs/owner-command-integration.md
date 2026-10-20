@@ -6,6 +6,8 @@ The integrated dashboard is `/operator/command` in Relay. It reuses the standalo
 
 The dashboard itself introduces no write endpoint, migration, secret, cross-origin proxy, or permission change. All task reads stay same-origin and bypass caches. Failed refreshes preserve prior tasks with a stale warning; unavailable counts are never replaced with zero. Task summaries cover only the API's latest 100 tasks. Production readiness remains unverified until inspected through the existing health tools. Browser-local leads and evidence entries from the standalone Site are not silently imported or treated as server records.
 
+The branch is reconciled with main commit `fc4b5184abb6e105d42fb479ecfdb4b0d31703a7`. Task and memory APIs retain main's `RELAY_OWNER_EMAIL` gate as well as the Owner AI allowlist. Main's plan-and-queue UI and saved plan results coexist with PR #13's final approval/rejection controls. A focused regression test covers both owner checks, pending-task start/completion rejection, rejection cancellation, atomic decision/audit batching, and saved plan retention.
+
 ## Activation
 
 1. Review and release PR #13 through the normal Relay release process. Do not deploy the standalone static archive over the main Relay Site.

@@ -1,4 +1,4 @@
-import { getChatGPTUser } from '@/app/chatgpt-auth';
+import { getOperatorUser } from '@/lib/operator-auth';
 import { database } from '@/db/database';
 import { recordAudit } from '@/lib/reliability';
 import { operatorOwnerAccess } from '@/lib/operator-owner-access';
@@ -10,8 +10,9 @@ function sameOrigin(request: Request) { return request.headers.get('origin') ===
 function id() { return `mem_${crypto.randomUUID()}`; }
 
 export async function GET(request: Request) {
-  const user = await getChatGPTUser();
-  if (!user) return json({ error: 'Authentication required.' }, 401);
+  const auth = await getOperatorUser();
+  if (!auth.user) return json({ error: auth.error }, auth.status);
+  const user = auth.user;
   const access = operatorOwnerAccess(user.email);
   if (!access.ok) return json({ error: access.error }, access.status);
   const url = new URL(request.url);
@@ -31,8 +32,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const user = await getChatGPTUser();
-  if (!user) return json({ error: 'Authentication required.' }, 401);
+  const auth = await getOperatorUser();
+  if (!auth.user) return json({ error: auth.error }, auth.status);
+  const user = auth.user;
   const access = operatorOwnerAccess(user.email);
   if (!access.ok) return json({ error: access.error }, access.status);
   if (!sameOrigin(request)) return json({ error: 'Cross-site requests are not allowed.' }, 403);
