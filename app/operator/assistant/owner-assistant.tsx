@@ -118,10 +118,10 @@ export default function OwnerAssistant({ embedded = false }: { embedded?: boolea
     {taskUpdateProposal && <section aria-label="Task update proposal" style={{ marginTop: 14, padding: 16, border: '1px solid #d8b679', borderRadius: 10, background: '#fff9ed' }}>
       <p style={{ marginTop: 0, fontWeight: 700 }}>Task update for your confirmation</p>
       <strong>{taskUpdateProposal.title || 'Operator task'}</strong>
-      <p>Task ID: <code>{proposal.taskId}</code></p>
-      <p>Status: {taskUpdateProposal.currentStatus || 'unknown'} → <strong>{proposal.status}</strong></p>
-      {proposal.nextAction !== undefined && <p><strong>Next action:</strong> {proposal.nextAction || '(clear next action)'}</p>}
-      {proposal.result !== undefined && <p><strong>Result:</strong> {proposal.result}</p>}
+      <p>Task ID: <code>{taskUpdateProposal.taskId}</code></p>
+      <p>Status: {taskUpdateProposal.currentStatus || 'unknown'} → <strong>{taskUpdateProposal.status}</strong></p>
+      {taskUpdateProposal.nextAction !== undefined && <p><strong>Next action:</strong> {taskUpdateProposal.nextAction || '(clear next action)'}</p>}
+      {taskUpdateProposal.result !== undefined && <p><strong>Result:</strong> {taskUpdateProposal.result}</p>}
       <p style={{ color: '#63736a', fontSize: 13 }}>Nothing changes until you confirm. Relay will recheck the task and approval rules when saving.</p>
       <button type="button" onClick={() => void applyTaskUpdate()} disabled={queuePending} style={{ padding: '10px 14px', border: 0, borderRadius: 8, background: '#164c3b', color: '#fff', fontWeight: 700 }}>{queuePending ? 'Updating…' : 'Confirm task update'}</button>
       <button type="button" onClick={() => setTaskUpdateProposal(null)} disabled={queuePending} style={{ marginLeft: 8, padding: '10px 14px', border: '1px solid #b9c7bc', borderRadius: 8, background: '#fff', color: '#152520' }}>Dismiss</button>
