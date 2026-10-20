@@ -35,12 +35,15 @@ export default function OperatorPage() {
     setTitle(''); setObjective(''); setMessage('Goal added to the Operator queue.'); await load();
   }
 
-  async function update(task: Task, status: string) {
+  async function update(task: Task, status: string, approval?: 'approved' | 'rejected') {
     if (busy) return;
+    if (approval === 'approved' && !window.confirm(`Approve “${task.title}” and start tracking it? This only changes its Operator status; it will not run code or make external changes.`)) return;
+    if (approval === 'rejected' && !window.confirm(`Reject “${task.title}” and cancel this proposed task?`)) return;
     setBusy(task.id);
+    setMessage('');
     try {
-      const response = await fetch('/api/operator/tasks', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: task.id, status }) });
-      if (response.ok) await load(); else setMessage('Task update failed.');
+      const response = await fetch('/api/operator/tasks', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: task.id, status, ...(approval ? { approval } : {}) }) });
+      if (response.ok) await load(); else { const body = await response.json() as { error?: string }; setMessage(body.error || 'Task update failed.'); }
     } catch {
       setMessage('Task update failed. Try again shortly.');
     } finally {
@@ -66,7 +69,16 @@ export default function OperatorPage() {
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}><h2 style={{ margin: 0, fontSize: 20 }}>{task.title}</h2><span>{task.status}{task.approval === 'pending_owner' ? ' · approval needed' : ''}</span></div>
         <p>{task.objective}</p>
         {task.next_action && <p><strong>Next:</strong> {task.next_action}</p>}
-        <div style={{ display: 'flex', gap: 8 }}><button disabled={busy === task.id} onClick={() => void update(task, 'in_progress')}>{busy === task.id ? 'Saving…' : 'Start'}</button><button disabled={busy === task.id} onClick={() => void update(task, 'blocked')}>Block</button><button disabled={busy === task.id} onClick={() => void update(task, 'completed')}>Complete</button></div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {task.approval === 'pending_owner' ? <>
+            <button disabled={busy === task.id} onClick={() => void update(task, 'in_progress', 'approved')}>{busy === task.id ? 'Saving…' : 'Approve & track'}</button>
+            <button disabled={busy === task.id} onClick={() => void update(task, 'cancelled', 'rejected')}>Reject proposal</button>
+          </> : task.approval === 'rejected' || task.status === 'cancelled' || task.status === 'completed' ? null : <>
+            <button disabled={busy === task.id} onClick={() => void update(task, 'in_progress')}>{busy === task.id ? 'Saving…' : 'Start tracking'}</button>
+            <button disabled={busy === task.id} onClick={() => void update(task, 'blocked')}>Block</button>
+            <button disabled={busy === task.id} onClick={() => void update(task, 'completed')}>Complete</button>
+          </>}
+        </div>
       </article>)}
     </section>
   </main>;

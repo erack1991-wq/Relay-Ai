@@ -1,6 +1,7 @@
 import { getChatGPTUser } from '@/app/chatgpt-auth';
 import { database } from '@/db/database';
 import { recordAudit } from '@/lib/reliability';
+import { operatorOwnerAccess } from '@/lib/operator-owner-access';
 
 export const dynamic = 'force-dynamic';
 const allowedStatuses = new Set(['queued', 'in_progress', 'blocked', 'completed', 'cancelled']);
@@ -12,6 +13,8 @@ function sameOrigin(request: Request) { return request.headers.get('origin') ===
 export async function GET() {
   const user = await getChatGPTUser();
   if (!user) return json({ error: 'Authentication required.' }, 401);
+  const access = operatorOwnerAccess(user.email);
+  if (!access.ok) return json({ error: access.error }, access.status);
   try {
     const rows = await database().prepare('SELECT id,title,objective,status,approval,next_action,result,created,updated FROM operator_tasks WHERE owner=? ORDER BY CASE status WHEN \'in_progress\' THEN 0 WHEN \'queued\' THEN 1 WHEN \'blocked\' THEN 2 ELSE 3 END, updated DESC LIMIT 100').bind(user.userId).all();
     return json({ tasks: rows.results });
@@ -24,6 +27,8 @@ export async function GET() {
 export async function POST(request: Request) {
   const user = await getChatGPTUser();
   if (!user) return json({ error: 'Authentication required.' }, 401);
+  const access = operatorOwnerAccess(user.email);
+  if (!access.ok) return json({ error: access.error }, access.status);
   if (!sameOrigin(request)) return json({ error: 'Cross-site requests are not allowed.' }, 403);
   let body: { title?: unknown; objective?: unknown; approval?: unknown; nextAction?: unknown };
   try { body = JSON.parse(await request.text()); } catch { return json({ error: 'Invalid request body.' }, 400); }
@@ -31,6 +36,7 @@ export async function POST(request: Request) {
   if (typeof body.objective !== 'string' || body.objective.trim().length < 2 || body.objective.length > 4000) return json({ error: 'An objective between 2 and 4000 characters is required.' }, 400);
   const approval = typeof body.approval === 'string' ? body.approval : 'not_required';
   if (!allowedApprovals.has(approval)) return json({ error: 'Invalid approval state.' }, 400);
+  if (approval !== 'not_required' && approval !== 'pending_owner') return json({ error: 'A new task cannot start already approved or rejected.' }, 400);
   const taskId = id();
   const now = new Date().toISOString();
   try {
@@ -46,6 +52,8 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
   const user = await getChatGPTUser();
   if (!user) return json({ error: 'Authentication required.' }, 401);
+  const access = operatorOwnerAccess(user.email);
+  if (!access.ok) return json({ error: access.error }, access.status);
   if (!sameOrigin(request)) return json({ error: 'Cross-site requests are not allowed.' }, 403);
   let body: { id?: unknown; status?: unknown; approval?: unknown; nextAction?: unknown; result?: unknown };
   try { body = JSON.parse(await request.text()); } catch { return json({ error: 'Invalid request body.' }, 400); }
@@ -54,11 +62,34 @@ export async function PATCH(request: Request) {
   if (body.approval !== undefined && (typeof body.approval !== 'string' || !allowedApprovals.has(body.approval))) return json({ error: 'Invalid approval state.' }, 400);
   const now = new Date().toISOString();
   try {
-    const existing = await database().prepare('SELECT id FROM operator_tasks WHERE id=? AND owner=?').bind(body.id, user.userId).first();
+    const db = database();
+    const existing = await db.prepare('SELECT id,status,approval FROM operator_tasks WHERE id=? AND owner=?').bind(body.id, user.userId).first<{ id: string; status: string; approval: string }>();
     if (!existing) return json({ error: 'Task not found.' }, 404);
-    await database().prepare('UPDATE operator_tasks SET status=COALESCE(?,status),approval=COALESCE(?,approval),next_action=COALESCE(?,next_action),result=COALESCE(?,result),updated=? WHERE id=? AND owner=?').bind(body.status ?? null, body.approval ?? null, typeof body.nextAction === 'string' ? body.nextAction.slice(0, 1000) : null, typeof body.result === 'string' ? body.result.slice(0, 4000) : null, now, body.id, user.userId).run();
-    try { await recordAudit(database(), { id: crypto.randomUUID(), actor: user.userId, action: 'operator.task_updated', target: body.id, metadata: { status: body.status, approval: body.approval } }); } catch {}
-    return json({ ok: true, id: body.id, updated: now });
+    const currentApproval = existing.approval;
+    const currentStatus = existing.status;
+    if (body.approval !== undefined && (currentApproval !== 'pending_owner' || (body.approval !== 'approved' && body.approval !== 'rejected'))) {
+      return json({ error: 'Only a pending task can receive one final owner approval or rejection.' }, 409);
+    }
+    if ((currentApproval === 'rejected' || currentStatus === 'cancelled' || currentStatus === 'completed') && body.status !== undefined && body.status !== currentStatus) {
+      return json({ error: 'Rejected and finished tasks cannot be reopened.' }, 409);
+    }
+    const nextApproval = typeof body.approval === 'string' ? body.approval : currentApproval;
+    let nextStatus = typeof body.status === 'string' ? body.status : currentStatus;
+    if (nextApproval === 'rejected') nextStatus = 'cancelled';
+    if (nextStatus === 'in_progress' && nextApproval !== 'approved' && nextApproval !== 'not_required') {
+      return json({ error: 'This task must be approved before it can be started.' }, 409);
+    }
+    if (nextStatus === 'completed' && (nextApproval === 'pending_owner' || nextApproval === 'rejected')) {
+      return json({ error: 'This task must be approved before it can be completed.' }, 409);
+    }
+    const update = db.prepare('UPDATE operator_tasks SET status=?,approval=COALESCE(?,approval),next_action=COALESCE(?,next_action),result=COALESCE(?,result),updated=? WHERE id=? AND owner=? AND status=? AND approval=?')
+      .bind(nextStatus, body.approval ?? null, typeof body.nextAction === 'string' ? body.nextAction.slice(0, 1000) : null, typeof body.result === 'string' ? body.result.slice(0, 4000) : null, now, body.id, user.userId, currentStatus, currentApproval);
+    const auditMetadata = JSON.stringify({ previousStatus: currentStatus, status: nextStatus, previousApproval: currentApproval, approval: nextApproval });
+    const audit = db.prepare('INSERT INTO audit_events(id,workspace,actor,action,target,metadata,created) VALUES(?,?,?,?,?,?,?)')
+      .bind(crypto.randomUUID(), null, user.userId, body.approval ? 'operator.task_approval_decided' : 'operator.task_updated', body.id, auditMetadata, now);
+    const results = await db.batch([update, audit]);
+    if (results[0]?.meta?.changes === 0) return json({ error: 'The task changed before this decision was saved. Reload and try again.' }, 409);
+    return json({ ok: true, id: body.id, status: nextStatus, approval: nextApproval, updated: now });
   } catch (error) {
     if (String(error).includes('no such table')) return json({ error: 'Operator tasks are unavailable until migration 0007 is applied.' }, 503);
     return json({ error: 'The operator task could not be updated.' }, 500);
