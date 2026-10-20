@@ -1,6 +1,6 @@
-import { getChatGPTUser } from '@/app/chatgpt-auth';
 import { database } from '@/db/database';
 import { recordAudit } from '@/lib/reliability';
+import { getOperatorUser } from '@/lib/operator-auth';
 
 export const dynamic = 'force-dynamic';
 const kinds = new Set(['decision', 'lesson', 'architecture', 'failure', 'customer_value']);
@@ -9,8 +9,9 @@ function sameOrigin(request: Request) { return request.headers.get('origin') ===
 function id() { return `mem_${crypto.randomUUID()}`; }
 
 export async function GET(request: Request) {
-  const user = await getChatGPTUser();
-  if (!user) return json({ error: 'Authentication required.' }, 401);
+  const auth = await getOperatorUser();
+  if (!auth.user) return json({ error: auth.error }, auth.status);
+  const user = auth.user;
   const url = new URL(request.url);
   const kind = url.searchParams.get('kind');
   const query = url.searchParams.get('q')?.trim().slice(0, 120) || '';
@@ -28,8 +29,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const user = await getChatGPTUser();
-  if (!user) return json({ error: 'Authentication required.' }, 401);
+  const auth = await getOperatorUser();
+  if (!auth.user) return json({ error: auth.error }, auth.status);
+  const user = auth.user;
   if (!sameOrigin(request)) return json({ error: 'Cross-site requests are not allowed.' }, 403);
   let body: { kind?: unknown; title?: unknown; content?: unknown; sourceTask?: unknown };
   try { body = JSON.parse(await request.text()); } catch { return json({ error: 'Invalid request body.' }, 400); }
