@@ -30,7 +30,7 @@ export default function OperatorPage() {
 
   async function create(event: FormEvent) {
     event.preventDefault();
-    await queueGoal();
+    await queueGoal(true);
   }
 
   async function queueGoal(withPlan = false) {
