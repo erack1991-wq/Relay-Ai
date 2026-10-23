@@ -30,6 +30,16 @@ test('Stripe subscription webhooks persist state and are idempotent', async t =>
   assert.deepEqual(await db.prepare('SELECT owner,stripe_customer_id,stripe_subscription_id,status FROM subscriptions').first(), { owner, stripe_customer_id: 'cus_1', stripe_subscription_id: 'sub_1', status: 'active' });
   assert.equal((await post(event)).status, 204);
   assert.equal((await db.prepare('SELECT count(*) AS n FROM subscription_events').first()).n, 1);
+  // A previously recorded provider receipt must not suppress an unfinished subscription update.
+  const replay = { id: 'evt_replay_1', type: 'customer.subscription.updated', data: { object: { id: 'sub_1', customer: 'cus_1', status: 'past_due' } } };
+  const receivedAt = new Date().toISOString();
+  await db.prepare('INSERT INTO provider_events(id,provider,event_type,payload,status,attempts,last_error,created,updated) VALUES(?,?,?,?,?,?,?,?,?)')
+    .bind(replay.id, 'stripe', replay.type, JSON.stringify(replay), 'received', 0, '', receivedAt, receivedAt).run();
+  assert.equal((await post(replay)).status, 204);
+  assert.equal((await db.prepare('SELECT status FROM subscriptions WHERE owner=?').bind(owner).first()).status, 'past_due');
+  assert.equal((await db.prepare('SELECT count(*) AS n FROM subscription_events WHERE id=?').bind(replay.id).first()).n, 1);
+  assert.equal((await post(replay)).status, 204);
+  assert.equal((await db.prepare('SELECT count(*) AS n FROM subscription_events WHERE id=?').bind(replay.id).first()).n, 1);
   const canceled = { id: 'evt_cancel_1', type: 'customer.subscription.deleted', data: { object: { id: 'sub_1', customer: 'cus_1', status: 'canceled' } } };
   assert.equal((await post(canceled)).status, 204);
   assert.equal((await db.prepare('SELECT status FROM subscriptions WHERE owner=?').bind(owner).first()).status, 'canceled');
