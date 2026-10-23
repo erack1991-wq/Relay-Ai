@@ -22,10 +22,6 @@ export async function POST(request: Request) {
   try{event=JSON.parse(raw) as StripeEvent;}catch{return Response.json({error:'Invalid webhook payload.'},{status:400});}
   if(!event.id||!event.type||!event.data?.object)return Response.json({error:'Invalid webhook payload.'},{status:400});
   const db=database(), object=event.data.object, metadata=(object.metadata&&typeof object.metadata==='object'?object.metadata:{}) as Record<string,unknown>;
-  let reliabilityAvailable=true;
-  let reliabilityEventRecorded=false;
-  try { reliabilityEventRecorded=await recordProviderEvent(db,{id:event.id,provider:'stripe',eventType:event.type,payload:event}); } catch { reliabilityAvailable=false; /* migration not applied yet; legacy ledger below remains authoritative */ }
-  if(reliabilityAvailable&&!reliabilityEventRecorded){ return new Response(null,{status:204}); }
   const owner=text(metadata.owner);
   const subscriptionId=event.type==='checkout.session.completed'?text(object.subscription):text(object.id);
   const customerId=text(object.customer);
@@ -43,5 +39,8 @@ export async function POST(request: Request) {
     try { await recordAudit(db,{id:`stripe:${event.id}`,workspace:undefined,actor:resolved,action:'subscription.updated',target:subscriptionId,metadata:{eventType:event.type,status:nextStatus}}); } catch { /* audit table is introduced by the reliability migration */ }
   }
   await db.prepare('INSERT OR IGNORE INTO subscription_events(id,created) VALUES(?,?)').bind(event.id,now()).run();
+  // Only record provider receipt after subscription state and idempotency ledger succeed.
+  // A retry of an earlier receipt must not suppress unfinished business processing.
+  try { await recordProviderEvent(db,{id:event.id,provider:'stripe',eventType:event.type,payload:event}); } catch { /* migration may not be applied; the subscription ledger remains authoritative */ }
   return new Response(null, { status: 204 });
 }
