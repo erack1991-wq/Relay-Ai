@@ -6,6 +6,10 @@ on:
     paths:
       - .github/workflows/security-deps-oct2026.yml
 
+concurrency:
+  group: relay-security-deps-oct2026
+  cancel-in-progress: true
+
 permissions:
   contents: write
 
@@ -24,7 +28,7 @@ jobs:
           cache: npm
       - name: Regenerate lockfile with patched framework dependencies
         run: |
-          npm install --save-exact next@16.4.3
+          npm install --save-exact next@16.4.3 react@19.3.1 react-dom@19.3.1
           npm install --save-dev --save-exact eslint-config-next@16.4.3 react-server-dom-webpack@19.3.1
           npm ci
       - name: Verify security and application compatibility
