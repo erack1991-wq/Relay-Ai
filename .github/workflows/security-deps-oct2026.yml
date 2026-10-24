@@ -1,0 +1,48 @@
+name: Patch October 2026 framework security dependencies
+
+on:
+  push:
+    branches: [security/next-react-oct2026]
+    paths:
+      - .github/workflows/security-deps-oct2026.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-verify:
+    if: github.repository == 'erack1991-wq/Relay-Ai'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Regenerate lockfile with patched framework dependencies
+        run: |
+          npm install --save-exact next@16.4.3
+          npm install --save-dev --save-exact eslint-config-next@16.4.3 react-server-dom-webpack@19.3.1
+          npm ci
+      - name: Verify security and application compatibility
+        run: |
+          npm audit --omit=dev --audit-level=high
+          npm run validate:providers -- .dev.vars.example
+          npm test
+          npm run typecheck
+          npm run lint
+          npm run build
+      - name: Commit only verified package and lockfile changes to this branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json
+          if git diff --cached --quiet; then
+            echo "No dependency changes to commit."
+            exit 0
+          fi
+          git commit -m "fix(security): patch Next.js and React server components"
+          git push origin HEAD:security/next-react-oct2026
