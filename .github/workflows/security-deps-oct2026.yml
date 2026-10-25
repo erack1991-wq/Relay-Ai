@@ -5,6 +5,7 @@ on:
     branches: [security/next-react-oct2026]
     paths:
       - .github/workflows/security-deps-oct2026.yml
+      - app/api/workspace/route.ts
 
 concurrency:
   group: relay-security-deps-oct2026
