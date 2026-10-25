@@ -28,12 +28,14 @@ jobs:
           cache: npm
       - name: Regenerate lockfile with patched framework dependencies
         run: |
-          npm install --save-exact next@16.4.3 react@19.3.1 react-dom@19.3.1
+          npm install --save-exact next@16.4.3 react@19.3.1 react-dom@19.3.1 zod@4.6.7
           npm install --save-dev --save-exact eslint-config-next@16.4.3 react-server-dom-webpack@19.3.1
+          npm audit fix
           npm ci
       - name: Verify security and application compatibility
         run: |
           npm audit --omit=dev --audit-level=high
+          npm audit --audit-level=critical
           npm run validate:providers -- .dev.vars.example
           npm test
           npm run typecheck
