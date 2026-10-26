@@ -19,11 +19,10 @@ export async function POST(request:Request){
         const call=await db.prepare('SELECT workspace,phone FROM voice_calls WHERE id=?').bind(sid).first<{workspace:string;phone:string}>();
         const workspace=requestedWorkspace&&requestedWorkspace===call?.workspace?requestedWorkspace:(call?.workspace||'');
         if(workspace&&call?.phone){
-          const customerId=crypto.randomUUID(), itemId=crypto.randomUUID();
-          await db.batch([
-            db.prepare("INSERT OR IGNORE INTO customers(id,workspace,name,phone,email,stage,sms_consent,marketing_consent,notes,created) VALUES(?,?,?,?,?,'New lead',0,0,?,?)").bind(customerId,workspace,'Unknown caller',call.phone,'',`Missed call ${sid}`,stamp),
-            db.prepare("INSERT OR IGNORE INTO items(id,workspace,customer,kind,title,amount,due,created) SELECT ?,workspace,id,'missed_call','Missed call',0,?,? FROM customers WHERE workspace=? AND phone=?").bind(itemId,stamp,stamp,workspace,call.phone)
-          ]);
+          // The initial call creates the customer and an intake item keyed by CallSid.
+          // Reuse that key so repeated or concurrent status callbacks cannot add
+          // duplicate missed-call opportunities for the same provider call.
+          await db.prepare("INSERT OR IGNORE INTO items(id,workspace,customer,kind,title,amount,due,created) SELECT ?,workspace,id,'missed_call','Missed call',0,?,? FROM customers WHERE workspace=? AND phone=?").bind(sid,stamp,stamp,workspace,call.phone).run();
         }
       }
     }
