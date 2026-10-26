@@ -100,6 +100,23 @@ test('Signed live voice intake, booking and confirmation',async t=>{
   const call=await db.prepare('SELECT status,error FROM voice_calls WHERE id=?').bind(id).first();
  assert.equal(call.status,'needs-attention');assert.match(call.error,/AI provider/);
  });
+ await t.test('repeated missed-call status callbacks do not duplicate a lead or opportunity',async()=>{
+  const id='CA'+'9'.repeat(32),url='https://relay.test/api/voice/status';
+  await webhook(id,0,'',{From:'+15550000009'});
+  const count=async(table)=>Number((await db.prepare(`SELECT count(*) AS n FROM ${table}`).first()).n);
+  const beforeCustomers=await count('customers'),beforeItems=await count('items');
+  const params=new URLSearchParams({AccountSid:env.TWILIO_ACCOUNT_SID,CallSid:id,CallStatus:'no-answer'});
+  const sig=createHmac('sha1',env.TWILIO_AUTH_TOKEN).update(url+[...params.keys()].sort().map(k=>k+params.get(k)).join('')).digest('base64');
+  const route=resolve('.sites-runtime/tests/voice-status.mjs');
+  const statusApi=await import(pathToFileURL(route).href);
+  const send=()=>statusApi.POST(new Request(url,{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded','x-twilio-signature':sig},body:params}));
+  const [a,b]=await Promise.all([send(),send()]);
+  assert.equal(a.status,204);assert.equal(b.status,204);
+  assert.equal((await send()).status,204);
+  assert.equal(await count('customers'),beforeCustomers);
+  assert.equal(await count('items'),beforeItems);
+  assert.equal((await db.prepare('SELECT count(*) AS n FROM items WHERE id=?').bind(id).first()).n,1);
+ });
  await t.test('human and urgent caller requests stay visible for the operator',async()=>{
   for (const [char,phrase,expected] of [['7','Please let me speak to a person','human callback'],['8','There is a gas leak','Urgent request']]) {
    const id='CA'+char.repeat(32);await webhook(id,0);const reply=(await webhook(id,1,phrase)).text;
