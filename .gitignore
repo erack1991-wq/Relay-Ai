@@ -51,3 +51,7 @@ next-env.d.ts
 /relay-site-scorecard-deploy.tar
 /relay-publish-*.tar
 *.tsbuildinfo
+
+# Runtime diagnostics may contain local paths, request metadata, or tunnel URLs.
+# Exclude future logs; existing Git history is unchanged.
+*.log
