@@ -32,6 +32,8 @@ jobs:
       - run: npm run build
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
+      - name: Block critical vulnerabilities in all dependencies
+        run: npm audit --audit-level=critical
       - name: Report development dependency audit
         continue-on-error: true
         run: npm audit --audit-level=high
