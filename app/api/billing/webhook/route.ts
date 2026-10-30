@@ -3,6 +3,25 @@ import { database } from '@/db/database';
 import { recordProviderEvent, recordAudit } from '@/lib/reliability';
 export const dynamic='force-dynamic';
 type StripeEvent={id?:string;type?:string;data?:{object?:Record<string,unknown>}};
+const MAX_WEBHOOK_BYTES=1024*1024; // Reject oversized Stripe events before signature verification or database work.
+async function readBoundedWebhookBody(request:Request):Promise<string|null>{
+  const declared=request.headers.get('content-length');
+  if(declared!==null&&Number(declared)>MAX_WEBHOOK_BYTES)return null;
+  const reader=request.body?.getReader();
+  if(!reader)return '';
+  const decoder=new TextDecoder();
+  let bytes=0,raw='';
+  try{
+    for(;;){
+      const {done,value}=await reader.read();
+      if(done)break;
+      bytes+=value.byteLength;
+      if(bytes>MAX_WEBHOOK_BYTES){await reader.cancel();return null;}
+      raw+=decoder.decode(value,{stream:true});
+    }
+    return raw+decoder.decode();
+  }finally{reader.releaseLock();}
+}
 const now=()=>new Date().toISOString();
 const text=(value:unknown)=>typeof value==='string'?value:'';
 const numberText=(value:unknown)=>typeof value==='number'&&Number.isFinite(value)?new Date(value*1000).toISOString():'';
@@ -10,7 +29,9 @@ export async function POST(request: Request) {
   const secret = bindings().STRIPE_WEBHOOK_SECRET;
   if (!secret) return Response.json({ error: 'Stripe billing is not configured.' }, { status: 503 });
   const signature = request.headers.get('stripe-signature') || '';
-  const raw = await request.text();
+  let raw:string|null;
+  try{raw=await readBoundedWebhookBody(request);}catch{return Response.json({error:'Webhook body could not be read.'},{status:503});}
+  if(raw===null)return Response.json({error:'Webhook payload too large.'},{status:413});
   const timestamp = signature.match(/(?:^|,)t=(\d+)/)?.[1];
   const v1 = signature.match(/(?:^|,)v1=([^,]+)/)?.[1];
   if (!timestamp || !v1 || Math.abs(Date.now() / 1000 - Number(timestamp)) > 300) return Response.json({ error: 'Invalid webhook.' }, { status: 400 });
