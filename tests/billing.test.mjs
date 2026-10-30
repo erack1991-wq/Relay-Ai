@@ -24,6 +24,15 @@ test('Stripe subscription webhooks persist state and are idempotent', async t =>
     const signature = createHmac('sha256', secret).update(`${timestamp}.${raw}`).digest('hex');
     return api.POST(new Request('https://relay.test/api/billing/webhook', { method: 'POST', headers: { 'stripe-signature': `t=${timestamp},v1=${signature}` }, body: raw }));
   }
+  await t.test('rejects oversized Stripe webhooks before parsing or database writes', async () => {
+    const url = 'https://relay.test/api/billing/webhook';
+    const oversized = await api.POST(new Request(url, { method: 'POST', body: 'x'.repeat(1024 * 1024 + 1) }));
+    assert.equal(oversized.status, 413, 'streamed payloads must be bounded even without Content-Length');
+    const declared = await api.POST(new Request(url, { method: 'POST', headers: { 'content-length': String(1024 * 1024 + 1) }, body: '{}' }));
+    assert.equal(declared.status, 413, 'declared oversized payloads should be rejected early');
+    assert.equal((await db.prepare('SELECT count(*) AS n FROM subscription_events').first()).n, 0);
+    assert.equal((await db.prepare('SELECT count(*) AS n FROM subscriptions').first()).n, 0);
+  });
   const owner = 'owner-paid';
   const event = { id: 'evt_paid_1', type: 'checkout.session.completed', data: { object: { id: 'cs_1', customer: 'cus_1', subscription: 'sub_1', metadata: { owner } } } };
   assert.equal((await post(event)).status, 204);
