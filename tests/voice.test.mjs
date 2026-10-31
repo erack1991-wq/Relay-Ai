@@ -32,6 +32,21 @@ test('Signed live voice intake, booking and confirmation',async t=>{
  }
  const sid='CA'+'1'.repeat(32);
  await t.test('rejects unsigned forged calls before writes',async()=>{const r=await api.handleVoice(new Request('https://relay.test/api/voice',{method:'POST',body:'CallSid='+sid,headers:{'content-type':'application/x-www-form-urlencoded'}}),true);assert.equal(r.status,403);assert.equal((await db.prepare('SELECT count(*) n FROM customers').first()).n,0);});
+ await t.test('rejects oversized signed Twilio forms before database writes',async()=>{
+  const url='https://relay.test/api/voice?workspace='+workspace;
+  const sid='CA'+'0'.repeat(32);
+  const params=new URLSearchParams({AccountSid:env.TWILIO_ACCOUNT_SID,CallSid:sid,From:'+15550000010',To:env.TWILIO_PHONE_NUMBER,Direction:'inbound',SpeechResult:'x'.repeat(20001)});
+  const sign=p=>createHmac('sha1',env.TWILIO_AUTH_TOKEN).update(url+[...p.keys()].sort().map(k=>k+p.get(k)).join('')).digest('base64');
+  const headers={'content-type':'application/x-www-form-urlencoded','x-twilio-signature':sign(params)};
+  const streamed=new Request(url,{method:'POST',headers,body:params});
+  assert.equal(streamed.headers.get('content-length'),null,'test must exercise streamed size enforcement');
+  assert.equal((await api.handleVoice(streamed,true)).status,403);
+  const small=new URLSearchParams({AccountSid:env.TWILIO_ACCOUNT_SID,CallSid:sid});
+  const declared=new Request(url,{method:'POST',headers:{...headers,'x-twilio-signature':sign(small),'content-length':'20001'},body:small});
+  assert.equal((await api.handleVoice(declared,true)).status,403);
+  assert.equal((await db.prepare('SELECT count(*) AS n FROM customers').first()).n,0);
+  assert.equal((await db.prepare('SELECT count(*) AS n FROM voice_calls').first()).n,0);
+ });
  await t.test('saves intake and conversational fields in the workspace',async()=>{
   assert.match((await webhook(sid,0)).text,/What is your name/);
   assert.match((await webhook(sid,1,'My name is Jane Smith')).text,/What service/);
