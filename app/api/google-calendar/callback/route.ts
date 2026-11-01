@@ -14,7 +14,13 @@ export async function GET(request: Request) {
   if (!user || !rawState || !storedState || rawState !== decodeURIComponent(storedState)) return new Response('Invalid authorization state', { status: 400 });
   let state: { workspace: string; owner: string; exp: number };
   try { state = JSON.parse(atob(rawState.split('.')[1])); } catch { return new Response('Invalid authorization state', { status: 400 }); }
-  if (state.owner !== user.userId || state.exp < Date.now()) return new Response('Authorization expired', { status: 400 });
+  if (state.owner !== user.userId || !Number.isFinite(state.exp) || state.exp < Date.now()) return new Response('Authorization expired', { status: 400 });
+  // OAuth state and its matching browser cookie are client-controlled; they
+  // establish CSRF continuity, not permission to connect a workspace.
+  // Recheck ownership at callback time in case access changed since /connect.
+  if (typeof state.workspace !== 'string' || !state.workspace) return new Response('Invalid authorization state', { status: 400 });
+  const owned = await database().prepare('SELECT id FROM workspaces WHERE id=? AND owner=?').bind(state.workspace, user.userId).first();
+  if (!owned) return new Response('Workspace not found', { status: 404 });
   const code = url.searchParams.get('code');
   if (!code) return new Response(`Google authorization was not completed: ${url.searchParams.get('error') || 'unknown error'}`, { status: 400 });
   try {
