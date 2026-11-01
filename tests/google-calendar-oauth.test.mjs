@@ -14,7 +14,7 @@ await build({
   entryPoints: ['app/api/google-calendar/callback/route.ts'], outfile: output,
   bundle: true, platform: 'node', format: 'esm', logLevel: 'silent',
   plugins: [{ name: 'isolated-oauth-test', setup(b) {
-    b.onResolve({ filter: /^cloudflare:workers$|^@\\/app\\/chatgpt-auth$|^@\\/lib\\/google-calendar$/ }, args => ({ path: args.path, namespace: 'oauth-test' }));
+    b.onResolve({ filter: /^cloudflare:workers$|^@\/app\/chatgpt-auth$|^@\/lib\/google-calendar$/ }, args => ({ path: args.path, namespace: 'oauth-test' }));
     b.onLoad({ filter: /.*/, namespace: 'oauth-test' }, args => ({ contents:
       args.path === 'cloudflare:workers'
         ? 'export const env = globalThis.__relayOAuthTest.env;'
